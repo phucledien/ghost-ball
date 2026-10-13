@@ -11,6 +11,7 @@ import { HEROES, HERO_BY_ID } from '../game/heroes.js';
 import { MODES } from '../game/modes.js';
 import { renderHero } from '../ui/portrait.js';
 import { iconURL, SKILL_ICON } from '../ui/icons.js';
+import { think } from '../game/ai.js';
 
 const cfg = await loadConfig();
 const C = cfg.get;
@@ -26,6 +27,7 @@ const input = new Input(stage, hud.touch);
 const params = new URLSearchParams(location.search);
 let modeId = params.get('mode') || C('rules.mode');
 let heroId = params.get('hero') || 'nova';
+const demo = params.has('demo');
 let match = null;
 let worldKey = '';
 
@@ -49,8 +51,10 @@ function startMatch(human) {
   hud.attach(match, stage);
   hud.showBanner('READY', `${MODES[modeId].name} · ${match.alive.length} strikers`, 'gold', 1400);
   if (human) {
-    match.on('win', () => setTimeout(showEnd, 1600));
-    match.on('elim', ({ player }) => { if (player.human) setTimeout(showEnd, 1800); });
+    if (!demo) {
+      match.on('win', () => setTimeout(showEnd, 1600));
+      match.on('elim', ({ player }) => { if (player.human) setTimeout(showEnd, 1800); });
+    }
   }
 }
 
@@ -163,7 +167,8 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (match) {
-    match.input = match.human ? input.poll(match.human) : null;
+    // ?demo=1: a bot drives your striker (for trailers / attract screens)
+    match.input = match.human ? (demo ? think(match, match.human, dt) : input.poll(match.human)) : null;
     match.update(dt);
   }
   stage.update(dt);

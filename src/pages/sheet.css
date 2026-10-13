@@ -1,7 +1,7 @@
 /* Design sheet layout only — every visual token comes from src/ui/style.css */
-html, body { height: auto; overflow-x: hidden; }
+html, body { height: auto; overflow-x: clip; }
 #sheet { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; }
-.sh-nav { position: sticky; top: 0; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; z-index: 20; }
+.sh-nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; z-index: 20; }
 .sh-nav .brand { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.06em; margin-bottom: 12px; line-height: 1.1; }
 .sh-nav .brand span { color: var(--accent); }
 .sh-nav a { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.14em; color: var(--ink-dim); text-decoration: none; padding: 6px 8px; border: 1px solid transparent; text-transform: uppercase; white-space: nowrap; }

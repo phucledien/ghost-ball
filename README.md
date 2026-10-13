@@ -1,72 +1,234 @@
-# Ghost Ball
+<div align="center">
 
-In this football hot-potato survival game, the ball sticks to whoever it touches. Whoever holds it when the buzzer goes (or kicked it last, if it's loose) is out. Heroes have MOBA-style passives and attack/defense skills. It's built as a web prototype (Vite + three.js) in a pixel-isometric voxel style, aimed at iOS/iPadOS.
+<img src="media/readme/hero.png" alt="Ghost Ball gameplay: eight voxel strikers on a sand pitch in a cliff-top temple arena" width="100%">
 
-See **[docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)** for the full design.
+# GHOST · BALL
 
-## Run
+**Pass it on. Don't be holding it at the buzzer.**
+
+A pixel-isometric football survival game with hero skills, items and a live tuning editor.<br>
+Web prototype (Vite + three.js) for an iOS / iPadOS game.
+
+![three.js](https://img.shields.io/badge/three.js-0.169-0e1524?style=flat-square&labelColor=18223a)
+![vite](https://img.shields.io/badge/vite-5-e8a93a?style=flat-square&labelColor=18223a)
+![platform](https://img.shields.io/badge/target-iOS%20%C2%B7%20iPadOS-3b7be0?style=flat-square&labelColor=18223a)
+![status](https://img.shields.io/badge/status-prototype-dc4343?style=flat-square&labelColor=18223a)
+
+[Showcase videos](#showcase) · [How it plays](#how-it-plays) · [Heroes](#heroes) · [Editor](#the-editor) · [Design system](#design-system) · [Run it](#run-it) · [Design doc](docs/GAME_DESIGN.md)
+
+</div>
+
+---
+
+## Showcase
+
+| Game | Editor | Design sheet |
+|:-:|:-:|:-:|
+| [<img src="media/readme/game.gif" alt="Gameplay clip" width="100%">](media/ghost-ball-game.mp4) | [<img src="media/readme/editor.gif" alt="Editor clip" width="100%">](media/ghost-ball-editor.mp4) | [<img src="media/readme/sheet.gif" alt="Design sheet clip" width="100%">](media/ghost-ball-sheet.mp4) |
+| [▶ Watch (58s)](media/ghost-ball-game.mp4) | [▶ Watch (62s)](media/ghost-ball-editor.mp4) | [▶ Watch (62s)](media/ghost-ball-sheet.mp4) |
+
+---
+
+## How it plays
+
+Eight strikers, one ball, a round clock. The ball sticks to whoever it touches.
+
+- **Holding the ball when the buzzer goes:** you're out.
+- **Ball loose or still in the air at the buzzer:** whoever kicked it last is out.
+- **Last striker standing:** crowned the egoist.
+
+To stop endless ping-pong, a new receiver has a short catch lock before they can pass, and can't pass straight back to whoever just passed to them.
+
+| | With the ball (**attacker**) | Without the ball (**runner**) |
+|---|---|---|
+| **A** | Pass. Hold to charge, drag to aim | Dash |
+| **B** | Attack skill | Defense skill |
+| **C** | Item | Item |
+
+### Modes
+
+| | Mode | Twist |
+|---|---|---|
+| CLASSIC | **Ghost Ball** | One ball, one round clock |
+| VARIANT A | **Hot Fuse** | The fuse burns fast while held and smoulders while loose. A loose ball drifts back to its kicker |
+| VARIANT B | **Twin Ego** | Two balls, more players, bigger pitch: two can drop per round |
+| VARIANT C | **Last Field** | The pitch shrinks after every elimination |
+| VARIANT D | **Sudden Death** | Hidden clock: the ball goes off anywhere between ½× and 1½× a round |
+
+### Arenas
+
+<img src="media/readme/arenas.png" alt="The three arenas: Sun Temple, Ego Lab, Frost Peak" width="100%">
+
+**Sun Temple** · **Ego Lab** · **Frost Peak**, three palettes over the same procedural voxel stadium.
+
+### Built for phones
+
+<table>
+<tr>
+<td width="32%"><img src="media/readme/phone.png" alt="Portrait phone layout with joystick and action buttons"></td>
+<td>
+
+- Left thumb **joystick**, right thumb **A / B / C** with cooldown sweeps
+- The HUD reflows for portrait via container queries, the same in the editor's phone frame
+- Safe-area insets, touch-first input, pixel scale tuned for mobile GPUs
+- Plan for iOS: wrap the web build with Capacitor first (see the [design doc](docs/GAME_DESIGN.md))
+
+</td>
+</tr>
+</table>
+
+---
+
+## Heroes
+
+Original characters inspired by ego-striker anime archetypes. Each one has a **passive**, an **attack** skill (usable with the ball) and a **defense** skill (usable without it). Every skill is an animated action split into phases. Its effects fire on phase boundaries, and every phase is tunable in the editor.
+
+| Hero | Role | Passive | Attack · with ball | Defense · without ball |
+|---|---|---|---|---|
+| **NOVA** · The Architect | Playmaker | Metavision: wider aim assist | **Direct Volley**: near-instant pass that leads the target | **Field Read**: everyone else moves in slow motion |
+| **BOLT** · The Panther | Speedster | Afterburn: always faster | **Blitz Carry**: dash with the ball, whoever you touch is IT | **Panther Leap**: passes sail underneath you |
+| **TITAN** · The King | Bruiser | Royal Body: can't be stunned | **Predator Cannon**: charged pass that stuns and knocks back | **Rampart**: stomp up a stone wall |
+| **JINX** · The Monster | Trickster | Inner Monster: shorter catch lock | **Phantom Pair**: real ball plus decoys | **Feint Step**: short blink |
+| **ECHO** · The Trapper | Genius | Lazy Genius: cooldowns refill faster while still | **Curve Ghost**: bending, homing pass | **Perfect Trap**: parry window, the ball fires straight back out |
+| **KAIZ** · The Emperor | Assassin | Magnus Field: rivals slowed near him | **Emperor Impact**: teleport behind a rival, hammer it in | **Crown Guard**: shield bubble |
+
+<img src="media/readme/sheet-heroes.png" alt="Hero sheet: sprite, portrait, stats, skills with phase timings, run cycle and skill frames" width="100%">
+
+**Items** spawn on the pitch, one slot each: Spring Cleats · Ego Shield · Magnet Lace · Cloak Flare · Freeze Whistle · Overclock.
+
+---
+
+## The editor
+
+<img src="media/readme/editor.png" alt="Editor: params sidebar, Skill Lab comparing locked and draft Titan cannon, phase timeline and pose-speed curve" width="100%">
+
+An animation and tuning editor modelled on a game-feel workflow. Every number in the game has a slider here, and changes apply live.
+
+- **Skill Lab** loops any action on the real gameplay code: kick, ball flight, catch, walls, effects
+- **Timeline:** HOLD / FAST / MOVE phases with draggable edges, a pose-speed curve, frame readout, ½ ¼ ⅒ speed, stepped 60 / 30 / 15 / 12 fps animation
+- **Locked · Draft · Both:** run your locked values next to your edits
+- **Views:** Game / Side / Front / Top / Orbit, plus Desk / Phone / Phone-landscape frames
+- **Overlays:** onion skins, foot arcs, smears, phase captions, arena or grid floor, shake on/off
+- **Live Match:** play or spectate a real match with the HUD while you tune, including UI colours and sizes
+- **Lock** writes `config/locked.json` plus a timestamped history entry with your note
+
+### Tuning loop
+
+```
+ editor  ──►  draft (saved in your browser, synced live to open game + sheet tabs)
+                │
+                ▼
+              LOCK  ──►  config/locked.json  +  config/history/<time>.json
+                │
+                ▼
+   "apply my locked config"  ──►  Claude bakes the values into the code defaults
+```
+
+Lock needs the dev server. Elsewhere, use **Copy JSON** and paste it to Claude.
+
+---
+
+## Design system
+
+Everything in the design sheet (`/sheet.html`) is rendered by the game's own code from the live config, so it can't drift from the game.
+
+<img src="media/readme/sheet-colors.png" alt="Colour tokens on the design sheet" width="100%">
+
+### Colour tokens
+
+| Token | Hex | | Use |
+|---|---|---|---|
+| `ui.panel` | `#0e1524` | ![](https://img.shields.io/badge/-%20%20%20%20-0e1524?style=flat-square) | Background, panels |
+| `ui.panel2` | `#18223a` | ![](https://img.shields.io/badge/-%20%20%20%20-18223a?style=flat-square) | Raised surfaces, cards |
+| `ui.line` | `#2b3858` | ![](https://img.shields.io/badge/-%20%20%20%20-2b3858?style=flat-square) | Borders, dividers |
+| `ui.ink` | `#f3e9d2` | ![](https://img.shields.io/badge/-%20%20%20%20-f3e9d2?style=flat-square) | Text |
+| `ui.accent` | `#e8a93a` | ![](https://img.shields.io/badge/-%20%20%20%20-e8a93a?style=flat-square) | Active chips, primary actions, A button |
+| `ui.blue` | `#3b7be0` | ![](https://img.shields.io/badge/-%20%20%20%20-3b7be0?style=flat-square) | **HOLD** phases, team blue |
+| `ui.red` | `#dc4343` | ![](https://img.shields.io/badge/-%20%20%20%20-dc4343?style=flat-square) | **FAST** phases, danger, "IT" |
+| `ui.tan` | `#8c7b58` | ![](https://img.shields.io/badge/-%20%20%20%20-8c7b58?style=flat-square) | **MOVE** phases |
+| `ui.green` | `#5cc46a` | ![](https://img.shields.io/badge/-%20%20%20%20-5cc46a?style=flat-square) | Ready, defense skills |
+
+### Typography
+
+| Role | Face | Used for |
+|---|---|---|
+| Display | **Silkscreen** | Logo, labels, timer, tags (uppercase, wide tracking) |
+| Body | **Pixelify Sans** | Descriptions, captions, buttons |
+
+Both come from Google Fonts. Bundle them locally for the iOS build.
+
+### Components & HUD
+
+<img src="media/readme/sheet-components.png" alt="Components: buttons, segmented chips, phase tags, cards, pips, mode and hero cards" width="100%">
+
+<img src="media/readme/sheet-hud.png" alt="HUD: player card, timer, roster, feed, banner, joystick and action buttons" width="100%">
+
+### Icons
+
+12 × 12 pixel icons for items, skills and UI, drawn from character grids in `src/ui/icons.js`.
+
+<img src="media/readme/sheet-icons.png" alt="Pixel icon set at 1x, 2x and 4x" width="100%">
+
+### The look
+
+- **Pixel-isometric:** a real 3D voxel scene rendered at ⅓ resolution and upscaled with `image-rendering: pixelated`, with the camera snapped to the texel grid so pixels don't shimmer
+- **Game feel:** hitstop on catches, trauma² screen shake, flashes, slow-mo on eliminations, smears and afterimages, voxel shatter
+- **Animation:** procedural poses blended through HOLD → FAST → MOVE phases, optionally stepped to 12–30 fps for a hand-animated feel
+
+---
+
+## Run it
 
 ```sh
 bun install      # or: npm install
-bun run dev      # or: npm run dev  → http://localhost:5173
+bun run dev      # or: npm run dev  →  http://localhost:5173
 ```
 
 | URL | What |
 |---|---|
-| `/` | Game: menu, mode + hero select, matches against bots (`?autoplay=1&hero=titan&mode=fuse` skips the menu) |
-| `/editor.html` | Live tuning editor: every value, the skill animation timeline, compare draft vs locked, Lock |
-| `/sheet.html` | Design sheet: colours, fonts, components, hero sprites, icons, VFX |
+| `/` | Game: menu, mode and hero select, matches against bots |
+| `/editor.html` | Live tuning editor |
+| `/sheet.html` | Design sheet |
 
-## Controls
+URL options for the game: `?autoplay=1` skips the menu, `&hero=titan`, `&mode=fuse|twin|shrink|sudden`, `&demo=1` lets a bot drive your striker.
+
+### Controls
 
 | | Touch | Keyboard / mouse |
 |---|---|---|
 | Move | Joystick | WASD / arrows |
-| A: pass (with ball) / dash (without) | A, hold to charge, drag to aim | J / Space / left click |
-| B: skill (attack with ball, defense without) | B | K / Q / right click |
-| C: item | C | L / E |
+| **A**: pass (with ball) / dash (without) | A: hold to charge, drag to aim | J / Space / left click (aims at cursor) |
+| **B**: skill | B | K / Q / right click |
+| **C**: item | C | L / E |
+| Back to menu | | Esc |
 
-## Tuning → Lock → hand off
+---
 
-1. Tweak values in `/editor.html`. Changes are a **draft** (saved in localStorage) and sync live to any open game tab.
-2. Press **Lock**. This writes `config/locked.json` (the new baseline) and `config/history/<timestamp>.json` (what changed).
-3. Tell Claude *"apply my locked config"* to bake the values into the code defaults.
-
-The Lock endpoint only exists on the dev server (`bun run dev`).
-
-## Structure
+## Project structure
 
 ```
 index.html / editor.html / sheet.html   page entries
 vite.config.js        multi-page build + /api/config lock endpoint (dev)
-config/locked.json    locked tuning values (created by Lock)
+config/locked.json    locked tuning values (written by Lock)
 config/history/       one snapshot per Lock
-docs/GAME_DESIGN.md   design doc
-src/core/schema.js    every tunable: default, range, label
-src/core/config.js    defaults < locked < draft; live sync; lock()
-src/engine/stage.js   renderer, iso ortho camera, pixel scale, shake, flash
-src/engine/arena.js   procedural pitch, stands, crowd, torches
-src/engine/themes.js  arena palettes (Sun Temple, Ego Lab, Frost Peak)
-src/engine/hero-model.js  voxel hero rig, pose application, ghosts
-src/engine/anim.js    poses, phase easing, locomotion cycle
-src/engine/vfx.js     instanced particles, rings, beams, walls, shields
-src/engine/props.js   ball, item crates, markers
-src/game/heroes.js    hero roster, skills, phases (+ their tunables)
-src/game/skills.js    skill gameplay hooked to animation phases
-src/game/sim.js       match: rules, rounds, ball physics, items (60 Hz)
-src/game/ai.js        bot holder / runner behaviour
-src/game/input.js     keyboard, mouse, touch → intent
-src/game/items.js     items (+ tunables)
-src/game/modes.js     game-mode variants
-src/ui/style.css      design system (tokens, components, HUD)
-src/ui/tokens.js      ui.* config → CSS variables
-src/ui/hud.js         in-match HUD + touch controls
-src/ui/icons.js       12×12 pixel icons
-src/ui/portrait.js    hero portraits / sprite frames (shared offscreen GL)
-src/pages/game.js     game page
-src/pages/editor.js   editor page
-src/editor/lab.js     Skill Lab: loops an action on a lab-mode Match (draft vs locked lanes)
-src/editor/editor.css editor chrome
-src/pages/sheet.js    design sheet page
-src/pages/sheet.css   design sheet layout
+docs/GAME_DESIGN.md   full design doc
+media/                showcase videos + README images
+src/core/             schema (every tunable) · config (defaults < locked < draft, live sync)
+src/engine/           stage (iso camera, pixel scale) · arena · themes · hero rig · poses · VFX · props
+src/game/             heroes · skills · sim (rules, ball, rounds) · ai · input · items · modes
+src/ui/               design system CSS · tokens · HUD · pixel icons · portraits
+src/editor/           Skill Lab + editor chrome
+src/pages/            game · editor · sheet entry scripts
 ```
+
+## Roadmap
+
+- [x] Web prototype: game, editor, design sheet
+- [ ] Playtest pass, balance from locked configs
+- [ ] Capacitor wrap → TestFlight on iPhone / iPad
+- [ ] Haptics, audio, bundled fonts
+- [ ] Online multiplayer
+
+<div align="center">
+<sub>Built with Claude Code · Original characters, no anime IP</sub>
+</div>
