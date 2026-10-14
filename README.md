@@ -150,7 +150,9 @@ On macOS, build output defaults to `~/Library/Developer/CodexBuilds/ghost-ball/d
 
 ### Deploy to Cloudflare
 
-Use the repository root and `bun run build` as the build command. For **Pages**, set the build output directory to `dist`. For **Workers Builds**, deploy the static output with `npx wrangler deploy --assets ./dist`. The game requires no server-side runtime; all six HTML entry points and their assets are included in the build.
+Use the repository root and `bun run build` as the build command. For **Pages**, set the build output directory to `dist`. For **Workers Builds**, use `npx wrangler deploy` as the deploy command. The committed `wrangler.jsonc` serves `dist/` as static assets and skips Wrangler's framework auto-configuration. Its Worker name is `ghost-ball`; if your existing Cloudflare Worker has another name, update the config to match. The game requires no server-side runtime; all six HTML entry points and their assets are included in the build.
+
+To check deployment locally on macOS after building, run `npx wrangler deploy --dry-run --assets "$HOME/Library/Developer/CodexBuilds/ghost-ball/dist" --outdir "$HOME/Library/Developer/CodexBuilds/ghost-ball/wrangler-dry-run"`. The asset override points Wrangler at the local Mac build folder; Cloudflare uses the configured `dist/` folder.
 
 The committed lockfile is verified with Bun **1.2.15**. Set the Cloudflare build variable `BUN_VERSION=1.2.15` to use that version. Keep Cloudflare's frozen install enabled: after changing dependencies, run `bun install`, commit both `package.json` and `bun.lock`, then verify `bun install --frozen-lockfile` before pushing.
 
