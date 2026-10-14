@@ -242,6 +242,12 @@ src/editor/           Skill Lab + editor chrome
 src/pages/            game · editor · sheet entry scripts
 ```
 
+## Art production
+
+Open [`/art.html`](art.html) for all six heroes, ten actions, eight facings and the pixel-finishing comparison. Live Blender masters are integrated in gameplay. [Authoring sources, reproduction and validation](docs/ART_PIPELINE.md).
+
+Build output now defaults to `~/Library/Developer/CodexBuilds/ghost-ball/dist` to keep generated files out of synced folders.
+
 ## Roadmap
 
 - [x] Web prototype: game, editor, design sheet
@@ -256,3 +262,15 @@ src/pages/            game · editor · sheet entry scripts
 <div align="center">
 <sub>Built with Claude Code · Original characters, no anime IP</sub>
 </div>
+
+### Full roster art update
+
+Six editable Blender masters and layered Aseprite sources now cover 2,880 frames. Temple, Ego Lab and Frost have coordinated art treatments; four core cues, twelve skill motifs and twenty-one 16×16 icons are integrated. The [Art Lab](art.html) compares original geometry, live masters and finished sprite bakes. [Device Check](device.html) measures three real match scenes in the browser. Physical-phone performance is not yet verified: the paired iPhone rejected tooling because Developer Mode is disabled. See [pipeline notes](docs/ART_PIPELINE.md) for the renderer decision, exact coverage and limitations.
+
+Phone clarity revision 5: Default now uses full CSS-resolution pixels on phones; Sharp is also selectable in Settings. A gold silhouette keeps the local player readable behind cover. Camera framing is unchanged. See the pipeline notes for checks and performance limits.
+
+Art revision 6 adds the three-map terrain pass, articulated running feet, synchronized kick/catch contact and compact phone labels. See [the art pipeline](docs/ART_PIPELINE.md) for sources and verification.
+
+Revision 7 completes master-model cosmetics, compact selection screens, last-touch/buzzer indicators, item duration feedback and buffered simultaneous input. The same Site contains the playable build and review evidence.
+
+Revision 8 adds the [interactive showcase](showcase.html): characters, sound pads/music, animated item VFX, twelve skill casts and orbitable arenas. Shared game effects now use animated facets, bright tapered ribbons, cast anticipation and trajectory-following ball wakes. The generated direction sheet and exact prompt are under `art/reference/`; implementation and validation details are in the art pipeline notes.

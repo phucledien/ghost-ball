@@ -7,25 +7,34 @@ export function buildBall(radius = 0.32) {
   const geo = new THREE.IcosahedronGeometry(1, 1);
   const pos = geo.attributes.position;
   const colors = [];
-  const ico = new THREE.IcosahedronGeometry(1, 0);
-  const verts = [];
-  for (let i = 0; i < ico.attributes.position.count; i++) verts.push(new THREE.Vector3().fromBufferAttribute(ico.attributes.position, i).normalize());
+  // Sparse panel centres keep most of the ball bright at gameplay size.
+  const verts = [[0,1,0],[0,0,1],[.95,0,-.3],[-.75,.25,-.6],[.2,-.9,.2]].map(v => new THREE.Vector3(...v).normalize());
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   for (let i = 0; i < pos.count; i += 3) {
     a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
     const n = a.clone().add(b).add(c).normalize();
-    const dark = verts.some((v) => v.dot(n) > 0.94);
-    const col = dark ? [0.09, 0.09, 0.13] : [0.96, 0.94, 0.9];
+    const dark = verts.some((v) => v.dot(n) > 0.90);
+    // Bake broad lighting into vertex colours; the unlit surface remains legible in shade.
+    const shade=.80+.20*Math.max(0,n.dot(new THREE.Vector3(-.5,1,.4).normalize()));
+    const col = (dark ? [.025,.035,.055] : [.96,.94,.88]).map(v=>v*shade);
     for (let k = 0; k < 3; k++) colors.push(...col);
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: '#000000' });
+  const material = new THREE.MeshBasicMaterial({ vertexColors: true });
+  // Keep the ball heat API; add its colour after the authored surface colour.
+  material.userData.heatColor=new THREE.Color('#000000');
+  material.onBeforeCompile=shader=>{
+    shader.uniforms.ballHeat={value:material.userData.heatColor};
+    shader.fragmentShader='uniform vec3 ballHeat;\n'+shader.fragmentShader;
+    shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>', 'outgoingLight += ballHeat;\n#include <opaque_fragment>');
+  };
   const mesh = new THREE.Mesh(geo, material);
   mesh.scale.setScalar(radius);
   mesh.castShadow = true;
   const g = new THREE.Group();
-  g.add(mesh);
+  const outline = new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 1.12, 1), new THREE.MeshBasicMaterial({ color: '#182338', side: THREE.BackSide }));
+  g.add(outline, mesh);
   g.userData.mesh = mesh;
   // Danger ring on the ground under the ball
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ff4a4a', transparent: true, opacity: 0, depthWrite: false }));

@@ -1,7 +1,10 @@
 // VFX: instanced voxel particles (solid + additive glow), ground rings,
 // beams, afterimages and a few persistent effect meshes (walls, shields).
 import * as THREE from 'three';
+import {makeSpellArt,makeBallWake} from './spell-art.js';
+import {SKILL_ART} from './skill-art.js';
 import { ghostClone, voxelsOf } from './hero-model.js';
+import { makeItemAura, makeShieldArt, ITEM_FX_COLORS } from './item-art.js';
 
 const MAX = 2600;
 const _m = new THREE.Matrix4();
@@ -80,6 +83,8 @@ export class VFX {
     this.discGeo.rotateX(-Math.PI / 2);
     this.boxGeo = new THREE.BoxGeometry(1, 1, 1);
     this.enabledSmears = true;
+    this.itemEffects = new Map();
+    this.persistentShields = new Set();
   }
 
   get mult() { return this.C('fx.particles'); }
@@ -146,6 +151,54 @@ export class VFX {
   }
 
   // ── Timed meshes ───────────────────────────────────────────────────────
+  // Both gameplay and the showcase use these time-based effect programmes.
+  playArt(motif,pos,dir,color,scale=1,life=.72,options={}) {
+    const art=makeSpellArt(motif,color,life,options);
+    art.group.position.set(pos.x,pos.y??.06,pos.z);
+    art.group.rotation.y=Math.atan2(dir?.x||0,dir?.z??1);
+    art.group.scale.setScalar(scale);
+    this._timed(art.group,life,k=>art.update((1-k)*life));
+    return art.group;
+  }
+  contact(kind,pos,dir={x:0,z:1},color='#fff0cc',power=1){
+    const motif={kick:'kick',catch:'catch',dash:'chevrons',elim:'cross'}[kind]||'cross';
+    const group=this.playArt(motif,pos,dir,color,power,kind==='elim'?.72:.44);
+    group.userData.cue=kind;return group;
+  }
+  skill(id,pos,dir={x:0,z:1},color=null,scale=1){
+    const spec=SKILL_ART[id];if(!spec||scale<=0)return;
+    const group=this.playArt(spec.motif,pos,dir,color||spec.color,scale,.78);
+    group.userData.skill=id;return group;
+  }
+  skillWindup(id,player,duration,color,scale=1){
+    if(duration<=0||scale<=0)return;
+    const spec=SKILL_ART[id],art=makeSpellArt(spec.motif,color||spec.color,duration,{windup:true});
+    const action=player.action;
+    art.group.scale.setScalar(scale);
+    this._timed(art.group,duration,k=>{
+      art.group.visible=player.alive!==false&&player.action===action&&(player.human||!(player.t?.cloak>0));
+      art.group.position.set(player.x,(player.y||0)+.04,player.z);
+      art.update((1-k)*duration);
+    });
+  }
+  syncBallWakes(balls,dt){
+    this.ballWakes??=new Map();
+    const active=new Set(balls.filter(b=>b.state==='flight'&&Math.hypot(b.vx,b.vz)>4));
+    for(const [ball,art] of this.ballWakes)if(!active.has(ball)){art.dispose();this.ballWakes.delete(ball);}
+    for(const ball of active){
+      let art=this.ballWakes.get(ball);
+      if(!art){art=makeBallWake(ball.color);this.scene.add(art.group);this.ballWakes.set(ball,art);}
+      art.update(new THREE.Vector3(ball.x,ball.y,ball.z),dt,ball.color);
+    }
+  }
+
+  _release(mesh) {
+    this.scene.remove(mesh);
+    const materials=new Set();
+    mesh.traverse(o=>{if(o.material)for(const m of [o.material].flat())materials.add(m);if(o.userData.disposeGeometry)o.geometry.dispose();if(o.isInstancedMesh)o.dispose();});
+    for(const material of materials)material.dispose();
+  }
+
   _timed(mesh, life, update) {
     this.scene.add(mesh);
     this.items.push({ mesh, life, max: life, update });
@@ -203,49 +256,93 @@ export class VFX {
   }
 
   // ── Persistent effect meshes (owned by the sim) ────────────────────────
-  makeWall(x, z, angle, len, color) {
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    g.rotation.y = angle;
-    const n = Math.max(2, Math.round(len / 0.5));
-    const blocks = [];
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < 3; j++) {
-        const shadeK = 0.82 + ((i + j) % 2) * 0.18;
-        const c = new THREE.Color(color).multiplyScalar(shadeK);
-        const b = new THREE.Mesh(this.boxGeo, new THREE.MeshLambertMaterial({ color: c }));
-        b.scale.set(0.5, 0.5, 0.6);
-        b.position.set(-len / 2 + 0.25 + i * (len - 0.5) / (n - 1), -1 + j * 0.5 + 0.25, 0);
-        b.castShadow = true;
-        b.receiveShadow = true;
-        b.userData.target = j * 0.5 + 0.25;
-        b.userData.delay = Math.abs(i - (n - 1) / 2) * 0.02 + j * 0.03;
-        g.add(b);
-        blocks.push(b);
-      }
+  makeWall(x,z,angle,len,color){
+    const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=angle;
+    const n=Math.max(2,Math.round(len/.5)),count=n*3;
+    const material=new THREE.MeshLambertMaterial();
+    const mesh=new THREE.InstancedMesh(this.boxGeo,material,count);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;
+    group.add(mesh);this.scene.add(group);
+    const blocks=[],transform=new THREE.Object3D();let t=0,disposed=false;
+    for(let i=0;i<n;i++)for(let j=0;j<3;j++){
+      blocks.push({x:-len/2+.25+i*(len-.5)/(n-1),target:j*.5+.25,delay:Math.abs(i-(n-1)/2)*.02+j*.03});
+      mesh.setColorAt(i*3+j,new THREE.Color(color).multiplyScalar(.82+((i+j)%2)*.18));
     }
-    this.scene.add(g);
-    let t = 0;
-    return {
-      group: g,
-      update: (dt, remaining) => {
-        t += dt;
-        for (const b of blocks) {
-          const u = Math.min(1, Math.max(0, (t - b.userData.delay) / 0.12));
-          const sink = remaining < 0.3 ? (0.3 - remaining) / 0.3 : 0;
-          b.position.y = -1 + (b.userData.target + 1) * (1 - Math.pow(1 - u, 3)) - sink * 1.6;
-        }
-      },
-      dispose: () => { this.scene.remove(g); },
+    const update=(dt,remaining)=>{
+      t+=dt;const sink=remaining<.3?(.3-remaining)/.3:0;
+      blocks.forEach((b,i)=>{const u=Math.min(1,Math.max(0,(t-b.delay)/.12));transform.position.set(b.x,-1+(b.target+1)*(1-Math.pow(1-u,3))-sink*1.6,0);transform.scale.set(.5,.5,.6);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);});
+      mesh.instanceMatrix.needsUpdate=true;
     };
+    update(0,1);
+    return {group,update,dispose:()=>{if(disposed)return;disposed=true;group.removeFromParent();mesh.dispose();material.dispose();}};
   }
 
   makeShield(color, radius = 1.2) {
-    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, wireframe: false }));
-    const w = new THREE.Mesh(m.geometry, new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
-    m.add(w);
-    this.scene.add(m);
-    return { mesh: m, dispose: () => { this.scene.remove(m); m.geometry.dispose(); } };
+    const effect = makeShieldArt(color, radius);
+    this.scene.add(effect.mesh); this.persistentShields.add(effect);
+    const release = effect.dispose;
+    effect.dispose = () => { release(); this.persistentShields.delete(effect); };
+    return effect;
+  }
+
+  // Call after simulation timers/positions update. Effects read actual state;
+  // they cannot outlive a consumed magnet, expired buff, removed or dead player.
+  syncItemEffects(players, dt = 0) {
+    const present = new Set(players);
+    for (const [player, effects] of this.itemEffects) {
+      if (!present.has(player) || !player.alive) {
+        for (const effect of effects.values()) effect.art.dispose();
+        this.itemEffects.delete(player);
+      }
+    }
+    for (const p of players) {
+      if (!p.alive) continue;
+      let effects = this.itemEffects.get(p);
+      const states = { cleats: p.t.cleats, cloak: p.human ? p.t.cloak : 0, magnet: p.magnet ? 1 : 0, freeze: p.freeze };
+      for (const [id, remaining] of Object.entries(states)) {
+        let effect = effects?.get(id);
+        if (!(remaining > 0)) {
+          if (effect) {
+            // Collapse inward when a timer runs out; magnet consumption snaps.
+            if(p.human||!(p.t.cloak>0))this.itemEnd(id,p);
+            effect.art.dispose(); effects.delete(id);
+          }
+          continue;
+        }
+        if (!effect) {
+          if (!effects) { effects = new Map(); this.itemEffects.set(p, effects); }
+          const art = makeItemAura(id); this.scene.add(art.group);
+          effect = { art, duration: id === 'magnet' ? 0 : Math.max(remaining, this.C(`item.${id === 'freeze' ? 'whistle' : id}.dur`) || 0), trailClock: 0 };
+          effects.set(id, effect);
+          this.ring(p, { color: ITEM_FX_COLORS[id], r0: .25, r1: .92, time: .22, additive: false });
+        }
+        effect.duration = id === 'magnet' ? 0 : Math.max(effect.duration, remaining);
+        effect.art.group.position.set(p.x, p.y || 0, p.z);
+        effect.art.group.rotation.y = id === 'magnet' ? 0 : Math.atan2(p.fx || 0, p.fz ?? 1);
+        // Don't reveal opponents while their cloak is active.
+        effect.art.group.visible = p.human || !(p.t.cloak > 0);
+        effect.art.update(dt, remaining, effect.duration);
+        if (id === 'cleats' && Math.hypot(p.vx, p.vz) > 2 && effect.art.group.visible) {
+          effect.trailClock += dt;
+          if (effect.trailClock >= 1 / 12) {
+            effect.trailClock %= 1 / 12;
+            const a = Math.atan2(p.fx || 0, p.fz ?? 1);
+            for (const side of [-1, 1]) this.trail({ x: p.x + Math.cos(a) * .26 * side, y: .10 + (p.y || 0), z: p.z - Math.sin(a) * .26 * side }, ITEM_FX_COLORS.cleats, .13, .25);
+          }
+        }
+      }
+      if (effects?.size === 0) this.itemEffects.delete(p);
+    }
+  }
+
+  itemActivation(id,pos,radius=1){
+    const color=ITEM_FX_COLORS[id==='whistle'?'freeze':id]||'#ffffff';
+    const motif={whistle:'freeze',cleats:'chevrons',shield:'crown',cloak:'blink',magnet:'trap',overclock:'scan'}[id]||'scan';
+    return this.playArt(motif,{x:pos.x,y:.04+(pos.y||0),z:pos.z},{x:pos.fx||0,z:pos.fz??1},color,1,.72,{radius});
+  }
+  itemEnd(id,pos){
+    const color=ITEM_FX_COLORS[id==='whistle'?'freeze':id]||'#b6f5ff';
+    return this.playArt(id==='shield'?'crown':'blink',{x:pos.x,y:.08,z:pos.z},{x:0,z:1},color,.7,.38);
   }
 
   update(dt) {
@@ -257,8 +354,7 @@ export class VFX {
       const o = it[i];
       o.life -= dt;
       if (o.life <= 0) {
-        this.scene.remove(o.mesh);
-        if (o.mesh.material?.dispose) o.mesh.material.dispose();
+        this._release(o.mesh);
         continue;
       }
       o.update(o.life / o.max);
@@ -268,9 +364,13 @@ export class VFX {
   }
 
   clear() {
+    for(const art of this.ballWakes?.values()||[])art.dispose();this.ballWakes?.clear();
+    for (const effects of this.itemEffects.values()) for (const effect of effects.values()) effect.art.dispose();
+    this.itemEffects.clear();
+    for (const shield of [...this.persistentShields]) shield.dispose();
     this.solid.clear();
     this.glow.clear();
-    for (const o of this.items) this.scene.remove(o.mesh);
+    for (const o of this.items) this._release(o.mesh);
     this.items.length = 0;
   }
 }

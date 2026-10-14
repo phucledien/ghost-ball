@@ -18,3 +18,25 @@ for (const [id, it] of Object.entries(ITEMS)) {
   for (const [k, d] of Object.entries(it.params)) entries.push(H.num(`item.${id}.${k}`, ...d));
 }
 addSchema(entries);
+
+// Shared, configuration-backed copy for held-item help and active timers.
+export function itemDetails(id,C){
+ const n=k=>Number(C(`item.${id}.${k}`));
+ switch(id){
+  case 'cleats':return {short:'Speed boost',effect:`Move ${n('speed').toFixed(2)}× faster`,duration:n('dur'),condition:'Starts when used'};
+  case 'shield':return {short:'Block one ball',effect:'Reflect the next ball that hits you',duration:n('dur'),condition:'Ends on a block or timeout'};
+  case 'magnet':return {short:'Guided pass',effect:'Your next targeted pass curves toward its receiver',condition:'Stays ready until a targeted pass'};
+  case 'cloak':return {short:'Break targeting',effect:'Bots and aim assist cannot target you',duration:n('dur'),condition:'You can still be hit by a loose ball'};
+  case 'whistle':return {short:'Freeze nearby',effect:`Freeze rivals within ${n('radius')} m for ${n('dur')} s`,condition:'Instant area effect'};
+  case 'overclock':return {short:'Reset cooldowns',effect:'Make dash and both skills ready now',condition:'Instant · best used while cooling down'};
+  default:return {short:'No item',effect:'Walk over a pickup to equip it',condition:''};
+ }
+}
+export function activeItemStates(p,C){
+ const rows=[];
+ for(const id of ['cleats','shield','cloak'])if(p.t[id]>0)rows.push({id,name:ITEMS[id].name,color:ITEMS[id].color,left:p.t[id],total:C(`item.${id}.dur`),label:id==='shield'?'1 BLOCK':id==='cleats'?`${Number(C('item.cleats.speed')).toFixed(2)}× SPEED`:'UNTARGETABLE'});
+ if(p.magnet)rows.push({id:'magnet',name:ITEMS.magnet.name,color:ITEMS.magnet.color,label:'NEXT TARGETED PASS',ready:true});
+ if(p.freeze>0)rows.push({id:'freeze',name:'Frozen',color:'#6af0ff',left:p.freeze,total:C('item.whistle.dur'),label:'MOVEMENT LOCKED'});
+ for(const [key,label,total] of [['crown','Crown guard',C('hero.kaiz.def.dur')],['trap','Perfect trap',C('hero.echo.def.window')],['invuln','Dodge window',.15],['haste','Skill speed',C('hero.nova.def.dur')],['blitz','Blitz drive',C('hero.bolt.atk.dur')]])if(p.t[key]>0)rows.push({id:key,name:label,color:'#e8a93a',left:p.t[key],total:total||p.t[key],label:'ACTIVE'});
+ return rows;
+}

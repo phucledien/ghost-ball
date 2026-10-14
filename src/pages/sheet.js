@@ -12,7 +12,7 @@ import { MODES } from '../game/modes.js';
 import { THEMES } from '../engine/themes.js';
 import { MAPS, MAP_IDS, ZONES } from '../game/maps.js';
 import { drawSchematic } from '../ui/schematic.js';
-import { ICONS, SKILL_ICON, iconURL, itemIconURL } from '../ui/icons.js';
+import { ICONS, ICON_SIZE, SKILL_ICON, iconURL, itemIconURL } from '../ui/icons.js';
 import { renderHero, portraitURL, actionFrames, runFrames, invalidatePortraits } from '../ui/portrait.js';
 import { Stage } from '../engine/stage.js';
 import { VFX } from '../engine/vfx.js';
@@ -258,7 +258,7 @@ function renderItems() {
     <p class="intro">Crates spawn on the pitch every <code>rules.itemEvery</code> = ${fmt(C('rules.itemEvery'))}s (max ${fmt(C('rules.maxItems'))}). One slot; use with the C button.</p>
     <div class="sh-grid item-grid">${Object.entries(ITEMS).map(([id, it]) => `
       <div class="gb-card item-card">
-        <div class="icons"><img src="${itemIconURL(id, 2)}" width="24" height="24"><img src="${itemIconURL(id, 3)}" width="36" height="36"><img src="${itemIconURL(id, 5)}" width="60" height="60"></div>
+        <div class="icons"><img src="${itemIconURL(id, 2)}" width="32" height="32"><img src="${itemIconURL(id, 3)}" width="48" height="48"><img src="${itemIconURL(id, 5)}" width="80" height="80"></div>
         <div class="sh-row" style="justify-content:space-between"><span class="t-h2" style="font-size:14px;color:${it.color}">${it.name}</span><code>${id}</code></div>
         <div class="t-small">${esc(it.desc)}</div>
         <div>${[`<div class="fx-card" style="padding:0"><div class="kv"><span>enabled</span><b>${C(`item.${id}.on`) ? 'on' : 'off'}</b></div>`, ...Object.entries(it.params).map(([k, d]) => `<div class="kv"><span>${esc(d[4])}</span><b>${fmt(C(`item.${id}.${k}`))}</b></div>`), '</div>'].join('')}</div>
@@ -275,10 +275,10 @@ function renderIcons() {
     return C('ui.accent');
   };
   body('icons').innerHTML = `
-    <p class="intro">12×12 character grids (<code>ui/icons.js</code>). Palette: <code>o</code> outline, <code>a</code> main, <code>b</code> highlight, <code>d</code> shade, <code>w</code> white. Shown at 1×, 2×, 4×.</p>
+    <p class="intro">16×16 hand-authored character grids (<code>ui/icons.js</code>). Palette: <code>o</code> outline, <code>a</code> main, <code>b</code> highlight, <code>d</code> shade, <code>w</code> white. Shown at 1×, 2×, 4×.</p>
     <div class="sh-grid icon-grid">${Object.keys(ICONS).map((name) => {
       const col = colorFor(name);
-      return `<div class="gb-card icon-cell"><div class="sizes">${[1, 2, 4].map((px) => `<img src="${iconURL(name, col, px)}" width="${12 * px}" height="${12 * px}">`).join('')}</div><div><div class="sn" style="font-family:var(--font-display);font-size:12px">${name}</div><code>${skillOwner[name] ? 'skill ' + skillOwner[name] : ITEMS[name] ? 'item' : 'ui'}</code></div></div>`;
+      return `<div class="gb-card icon-cell"><div class="sizes">${[1, 2, 4].map((px) => `<img src="${iconURL(name, col, px)}" width="${ICON_SIZE * px}" height="${ICON_SIZE * px}">`).join('')}</div><div><div class="sn" style="font-family:var(--font-display);font-size:12px">${name}</div><code>${skillOwner[name] ? 'skill ' + skillOwner[name] : ITEMS[name] ? 'item' : 'ui'}</code></div></div>`;
     }).join('')}</div>`;
 }
 
@@ -418,7 +418,7 @@ function flush() {
   if (all) { all = false; invalidatePortraits(); renderAll(); return; }
   const has = (p) => keys.some((k) => k.startsWith(p));
   if (has('ui.')) { renderColors(); renderHud(); renderType(); }
-  if (has('hero.')) {
+  if (has('hero.') || has('art.')) {
     const ids = new Set(keys.filter((k) => k.startsWith('hero.')).map((k) => k.split('.')[1]));
     if (keys.some((k) => /\.(jersey|hair)$/.test(k))) invalidatePortraits();
     for (const id of ids) renderHeroes(id);

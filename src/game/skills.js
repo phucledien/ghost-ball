@@ -1,6 +1,7 @@
 // Skill implementations. Each starts an animated action; gameplay effects
 // fire on phase boundaries (same phases the editor timeline shows).
 import * as THREE from 'three';
+import {SKILL_ART} from '../engine/skill-art.js';
 import { footWorld } from '../engine/hero-model.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -31,13 +32,21 @@ function moveDir(m, p) {
 const P = (m, p, slot) => (k) => m.C(`hero.${p.heroId}.${slot}.${k}`);
 const FX = (m, p) => m.C(`hero.${p.heroId}.fx`);
 
+function startSkill(m,p,id,hooks,options){
+ const phase=SKILL_ART[id].phase,run=hooks[phase];
+ hooks[phase]=()=>{run?.();m.vfx.skill(id,{x:p.x,y:.07,z:p.z},{x:p.fx,z:p.fz},FX(m,p),m.C(`hero.${id}.fxScale`));};
+ m.startAction(p,id,hooks,options);
+ let windup=0;for(const ph of p.action.phases){if(ph.name===phase)break;windup+=ph.dur;}
+ m.vfx.skillWindup(id,p,windup,FX(m,p),m.C(`hero.${id}.fxScale`));
+}
+
 export const SKILLS = {
   // ── NOVA ───────────────────────────────────────────────────────────────
   'nova.atk': (m, p, ball) => {
     const k = P(m, p, 'atk'), col = FX(m, p), s = k('fxScale');
     const dir = aimDir(m, p);
     let target = null;
-    m.startAction(p, 'nova.atk', {
+    startSkill(m,p, 'nova.atk', {
       read: () => {
         target = m.aimAssist(p, dir, 25);
         m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 3 * s, r1: 0.4, time: k('read') + 0.05 });
@@ -62,7 +71,7 @@ export const SKILLS = {
   },
   'nova.def': (m, p) => {
     const k = P(m, p, 'def'), col = FX(m, p), s = k('fxScale');
-    m.startAction(p, 'nova.def', {
+    startSkill(m,p, 'nova.def', {
       pulse: () => {
         // Self-only: a burst of pace plus the pass lanes of every holder,
         // so NOVA "reads" where the ball is going next.
@@ -86,7 +95,7 @@ export const SKILLS = {
     const d = aimDir(m, p);
     p.dashDir = d;
     p.fx = d.x; p.fz = d.z;
-    m.startAction(p, 'bolt.atk', {
+    startSkill(m,p, 'bolt.atk', {
       blitz: () => {
         p.t.blitz = k('blitz');
         m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.3, r1: 2 * k('fxScale'), time: 0.25 });
@@ -99,7 +108,7 @@ export const SKILLS = {
   'bolt.def': (m, p) => {
     const k = P(m, p, 'def'), col = FX(m, p);
     const d = moveDir(m, p);
-    m.startAction(p, 'bolt.def', {
+    startSkill(m,p, 'bolt.def', {
       leap: () => {
         const dist = k('dist');
         const hw = m.W / 2 - 0.5, hd = m.D / 2 - 0.5;
@@ -118,7 +127,7 @@ export const SKILLS = {
     const k = P(m, p, 'atk'), col = FX(m, p), s = k('fxScale');
     const dir = aimDir(m, p);
     let charging = true;
-    m.startAction(p, 'titan.atk', {
+    startSkill(m,p, 'titan.atk', {
       charge: () => {
         const n = 10;
         for (let i = 0; i < n; i++) {
@@ -137,8 +146,8 @@ export const SKILLS = {
         m.kick(p, ball, d, k('speedMul'), { target, color: col, flat: true, stun: k('stun'), knock: k('knock'), charge: 1 });
         m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.4, r1: 4.5 * s, time: 0.4 });
         m.vfx.ring({ x: p.x, z: p.z }, { color: '#ffffff', r0: 0.3, r1: 2.5 * s, time: 0.25 });
-        m.vfx.burst(V(p.x + d.x, 0.6, p.z + d.z), { count: 40, color: [col, '#ffffff', '#ff5a2a'], glow: true, dir: d, spread: 0.35, speed: 14, up: 3, life: 0.4, size: 0.22 });
-        m.vfx.burst(V(p.x, 0.1, p.z), { count: 20, color: m.arena.theme.speck, speed: 6, up: 6, life: 0.7, size: 0.2 });
+        m.vfx.burst(V(p.x + d.x, 0.6, p.z + d.z), { count: 8, color: [col, '#ffffff', '#ff5a2a'], glow: true, dir: d, spread: 0.35, speed: 14, up: 3, life: 0.4, size: 0.22 });
+        m.vfx.burst(V(p.x, 0.1, p.z), { count: 10, color: m.arena.theme.speck, speed: 6, up: 6, life: 0.7, size: 0.2 });
         m.stage.shake(0.7 * s);
         m.stage.flash(col, 0.5, 0.14);
         m.stage.zoomPunch(0.06 * s);
@@ -149,12 +158,12 @@ export const SKILLS = {
   },
   'titan.def': (m, p) => {
     const k = P(m, p, 'def');
-    m.startAction(p, 'titan.def', {
+    startSkill(m,p, 'titan.def', {
       rise: () => {
         const cx = p.x + p.fx * 1.5, cz = p.z + p.fz * 1.5;
         const angle = Math.atan2(p.fx, p.fz);
         m.addWall(cx, cz, angle, k('wallLen'), k('wallTime'), m.arena.theme.rock);
-        m.vfx.burst(V(cx, 0.2, cz), { count: 30, color: [m.arena.theme.rock, m.arena.theme.speck[0], '#ffffff'], speed: 6, up: 7, life: 0.6, size: 0.22 });
+        m.vfx.burst(V(cx, 0.2, cz), { count: 14, color: [m.arena.theme.rock, m.arena.theme.speck[0], '#ffffff'], speed: 6, up: 7, life: 0.6, size: 0.22 });
         m.vfx.ring({ x: p.x, z: p.z }, { color: FX(m, p), r0: 0.4, r1: 3 * k('fxScale'), time: 0.3 });
         m.stage.shake(0.55);
       },
@@ -165,7 +174,7 @@ export const SKILLS = {
   'jinx.atk': (m, p, ball) => {
     const k = P(m, p, 'atk'), col = FX(m, p);
     const dir = aimDir(m, p);
-    m.startAction(p, 'jinx.atk', {
+    startSkill(m,p, 'jinx.atk', {
       twirl: () => { m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 1.6, r1: 0.4, time: k('twirl') }); },
       split: () => {
         if (!m.holding(p)) return;
@@ -184,7 +193,7 @@ export const SKILLS = {
           m.kick(p, dec, { x: Math.cos(a), z: Math.sin(a) }, 1.15, { color: col });
           dec.immune.set(p.id, m.time + 10);
         }
-        m.vfx.burst(V(p.x, 0.5, p.z), { count: 18, color: [col, '#ffffff'], glow: true, speed: 6, up: 3, life: 0.35 });
+        m.vfx.burst(V(p.x, 0.5, p.z), { count: 8, color: [col, '#ffffff'], glow: true, speed: 6, up: 3, life: 0.35 });
         m.stage.shake(0.2);
       },
     });
@@ -192,17 +201,17 @@ export const SKILLS = {
   'jinx.def': (m, p) => {
     const k = P(m, p, 'def'), col = FX(m, p);
     const d = moveDir(m, p);
-    m.startAction(p, 'jinx.def', {
+    startSkill(m,p, 'jinx.def', {
       blink: () => {
         m.vfx.afterimage(p.model, col, 0.45, 0.6);
-        m.vfx.burst(V(p.x, 0.9, p.z), { count: 16, color: [col, '#ffffff'], glow: true, speed: 4, up: 2, life: 0.35 });
+        m.vfx.burst(V(p.x, 0.9, p.z), { count: 8, color: [col, '#ffffff'], glow: true, speed: 4, up: 2, life: 0.35 });
         const dist = k('dist');
         p.x += d.x * dist; p.z += d.z * dist;
         m.clampToField(p);
         m.solid(p);
         p.t.invuln = 0.15;
         p.fx = d.x; p.fz = d.z;
-        m.vfx.burst(V(p.x, 0.9, p.z), { count: 16, color: [col, '#ffffff'], glow: true, speed: 4, up: 2, life: 0.35 });
+        m.vfx.burst(V(p.x, 0.9, p.z), { count: 8, color: [col, '#ffffff'], glow: true, speed: 4, up: 2, life: 0.35 });
         m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 1.4 * k('fxScale'), r1: 0.2, time: 0.2 });
       },
     }, { moveMul: 0.6 });
@@ -212,7 +221,7 @@ export const SKILLS = {
   'echo.atk': (m, p, ball) => {
     const k = P(m, p, 'atk'), col = FX(m, p);
     const dir = aimDir(m, p);
-    m.startAction(p, 'echo.atk', {
+    startSkill(m,p, 'echo.atk', {
       whip: () => {
         if (!m.holding(p)) return;
         const target = m.aimAssist(p, dir, 40);
@@ -221,13 +230,13 @@ export const SKILLS = {
         const d = { x: Math.cos(base), z: Math.sin(base) };
         m.kick(p, ball, d, k('speedMul'), { target, color: col, homing: target ? k('homing') : 0, lob: 0.6 });
         m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.3, r1: 2 * k('fxScale'), time: 0.25 });
-        m.vfx.burst(V(p.x, 0.4, p.z), { count: 16, color: [col, '#ffffff'], glow: true, dir: d, spread: 0.8, speed: 5, up: 2, life: 0.35 });
+        m.vfx.burst(V(p.x, 0.4, p.z), { count: 8, color: [col, '#ffffff'], glow: true, dir: d, spread: 0.8, speed: 5, up: 2, life: 0.35 });
       },
     });
   },
   'echo.def': (m, p) => {
     const k = P(m, p, 'def'), col = FX(m, p);
-    m.startAction(p, 'echo.def', {
+    startSkill(m,p, 'echo.def', {
       window: () => {
         p.t.trap = k('window');
         m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 1.8 * k('fxScale'), r1: 0.8, time: k('window'), opacity: 0.6 });
@@ -247,10 +256,10 @@ export const SKILLS = {
       if (d < k('range') && d < best) { best = d; target = o; }
     }
     if (!target) return false;
-    m.startAction(p, 'kaiz.atk', {
+    startSkill(m,p, 'kaiz.atk', {
       vanish: () => {
         m.vfx.afterimage(p.model, col, 0.4, 0.7);
-        m.vfx.burst(V(p.x, 0.9, p.z), { count: 20, color: [col, '#ffffff'], glow: true, speed: 5, up: 3, life: 0.4 });
+        m.vfx.burst(V(p.x, 0.9, p.z), { count: 10, color: [col, '#ffffff'], glow: true, speed: 5, up: 3, life: 0.4 });
         p.model.visible = false;
       },
       strike: () => {
@@ -272,7 +281,7 @@ export const SKILLS = {
         const at = V(target.x, 0.1, target.z);
         m.vfx.ring(at, { color: col, r0: 0.3, r1: 3.5 * s, time: 0.35 });
         m.vfx.ring(at, { color: '#ffffff', r0: 0.2, r1: 2 * s, time: 0.2 });
-        m.vfx.burst(V(target.x, 1, target.z), { count: 36, color: [col, '#ffffff', '#ffd84a'], glow: true, speed: 10, up: 6, life: 0.5 });
+        m.vfx.burst(V(target.x, 1, target.z), { count: 8, color: [col, '#ffffff', '#ffd84a'], glow: true, speed: 10, up: 6, life: 0.5 });
         m.vfx.pillar(at, col, 7, 0.5, 0.35);
         m.stage.shake(0.5 * s);
         m.stage.flash(col, 0.5, 0.15);
@@ -283,7 +292,7 @@ export const SKILLS = {
   },
   'kaiz.def': (m, p) => {
     const k = P(m, p, 'def'), col = FX(m, p);
-    m.startAction(p, 'kaiz.def', {
+    startSkill(m,p, 'kaiz.def', {
       raise: () => {
         p.t.crown = k('dur');
         m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.4, r1: 2.2 * k('fxScale'), time: 0.3 });

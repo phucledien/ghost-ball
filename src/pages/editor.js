@@ -18,8 +18,8 @@ import { bindTokens } from '../ui/tokens.js';
 import { invalidatePortraits } from '../ui/portrait.js';
 import { SkillLab } from '../editor/lab.js';
 
-// Dev serves the game at /, the published artifact ships it as game.html
-const GAME_URL = import.meta.env.DEV ? './' : './game.html';
+// Relative index route works in development and in the published /play/ directory.
+const GAME_URL = './';
 
 const cfg = await loadConfig();
 const C = cfg.get;
@@ -189,7 +189,20 @@ const search = el('input');
 search.type = 'search';
 search.placeholder = 'Search params…';
 const collapseBtn = el('button', 'gb-btn', 'Collapse');
-sideHead.append(search, collapseBtn);
+const closeParams = el('button', 'gb-btn ed-side-close', 'Close');
+closeParams.setAttribute('aria-label', 'Close parameters');
+function closeParameterDrawer() {
+  side.classList.remove('open');
+  sideToggle.focus({ preventScroll: true });
+}
+closeParams.onclick = closeParameterDrawer;
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && side.classList.contains('open') && matchMedia('(max-width: 980px)').matches) {
+    event.preventDefault();
+    closeParameterDrawer();
+  }
+});
+sideHead.append(search, collapseBtn, closeParams);
 const params = el('div', 'ed-params');
 const foot = el('div', 'ed-foot');
 side.append(sideHead, params, foot);
@@ -663,9 +676,10 @@ cfg.onChange((key) => {
   syncParams(key);
   renderDiff();
   if (!key || key.startsWith('arena.')) buildWorld();
-  if (!key || /^hero\.[a-z]+\.(jersey|hair)$/.test(key)) {
+  if (!key || key === 'art.heroStyle' || /^hero\.[a-z]+\.(jersey|hair)$/.test(key)) {
     invalidatePortraits();
     if (state.mode === 'lab') { lab.rebuild(); afterRebuild(); }
+    else match?.refreshArt();
   }
   if (key === 'render.pixelScale') pixelSeg.refresh();
   if (key === 'render.animFps') fpsSeg.refresh();

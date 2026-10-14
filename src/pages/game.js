@@ -16,15 +16,21 @@ import { MAPS, resolveMap } from '../game/maps.js';
 import { invalidatePortraits } from '../ui/portrait.js';
 import { think } from '../game/ai.js';
 import { Audio } from '../engine/audio.js';
+import { PlayerVisibility } from '../engine/player-visibility.js';
 
 const cfg = await loadConfig();
 const prefs = new Prefs();
 // Player settings sit on top of the tuned config (never written into it).
-const C = prefs.wrap(cfg.get);
+const baseC = prefs.wrap(cfg.get);
+const artParam = new URLSearchParams(location.search).get('art');
+const benchmark=new URLSearchParams(location.search).get('bench')==='1';
+const phoneView = matchMedia('(max-width: 600px), (max-height: 600px) and (pointer: coarse)');
+const C = k => k==='render.pixelScale' && prefs.get('pixel')==='auto' && phoneView.matches ? 1 : benchmark && k==='rules.roundTime'?600:benchmark && k==='rules.players'?12:benchmark && k==='art.benchmark'?true:k === 'art.heroStyle' && ['master', 'legacy'].includes(artParam) ? artParam : baseC(k);
 applyTokens(C);
 
 const app = document.getElementById('app');
 const stage = new Stage(app, C);
+const playerVisibility = new PlayerVisibility(stage.scene);
 const arena = new Arena(stage.scene);
 const vfx = new VFX(stage.scene, C);
 const hud = new Hud(app, C);
@@ -209,7 +215,8 @@ const refreshBadge = () => {
 cfg.onChange((key) => {
   refreshBadge();
   if (!key || key.startsWith('ui.')) applyTokens(C);
-  if (!key || /^hero\.[a-z]+\.(jersey|hair|fx)$/.test(key)) { invalidatePortraits(); menu.clearPortraits(); }
+  if (!key || key === 'art.heroStyle' || /^hero\.[a-z]+\.(jersey|hair|fx)$/.test(key)) { invalidatePortraits(); menu.clearPortraits(); }
+  if (!key || key === 'art.heroStyle' || /^hero\.[a-z]+\.(jersey|hair)$/.test(key)) match?.refreshArt();
   if ((!key || key.startsWith('arena.')) && match) {
     worldKey = '';
     buildWorld(picks.map, match.modeId);
@@ -218,9 +225,11 @@ cfg.onChange((key) => {
 refreshBadge();
 
 // Debug handle (used by automated screenshots)
-window.__gb = { get match() { return match; }, cfg, stage, menu, picks, prefs, audio };
+window.__gb = { get match() { return match; }, cfg, stage, menu, picks, prefs, audio, playerVisibility, artRevision: 'animated-showcase-8' };
 
 // ── Loop ─────────────────────────────────────────────────────────────────
+input.onReset=()=>match?.resetInput();
+let wasMenuOpen=menu.open;
 let last = performance.now();
 let lastTick = 0;
 function frame(now) {
@@ -232,12 +241,14 @@ function frame(now) {
     if (s !== lastTick && s <= 3 && s > 0) audio.play('tick');
     lastTick = s;
   }
+  if(menu.open!==wasMenuOpen){input.reset();wasMenuOpen=menu.open;}
   if (match) {
     // ?demo=1: a bot drives your striker (for trailers / attract screens)
-    match.input = match.human ? (demo ? think(match, match.human, dt) : input.poll(match.human)) : null;
+    match.input = match.human && !menu.open ? (demo ? think(match, match.human, dt) : input.poll(match.human)) : null;
     match.update(dt);
   }
   stage.update(dt);
+  playerVisibility.update(match?.human?.alive && !menu.open ? match.human.model : null);
   stage.render();
   hud.update();
   requestAnimationFrame(frame);

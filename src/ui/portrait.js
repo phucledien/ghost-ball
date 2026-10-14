@@ -23,7 +23,7 @@ function rig() {
 
 const models = new Map();
 function modelFor(heroId, C, loadout = null) {
-  const key = loadout ? `${heroId}|${JSON.stringify(loadout)}` : heroId;
+  const key = `${heroId}|${C?.('art.heroStyle') || 'master'}|${JSON.stringify(loadout)}`;
   if (!models.has(key)) {
     if (models.size > 48) models.clear();
     models.set(key, buildHero(heroId, C, loadout));
@@ -41,7 +41,7 @@ export function renderHero(heroId, C, { w = 48, h = 48, mode = 'bust', yaw = 0.5
   m.rotation.y = yaw;
   // bust: head & shoulders · full: sprite frames · stage: the select-screen turntable (fits TITAN)
   const bust = mode === 'bust';
-  const b = HERO_BY_ID[heroId]?.look.build ?? 1;
+  const b = m.userData.artStyle==='master' ? (m.userData.rig.hipsY/.88) : HERO_BY_ID[heroId]?.look.build ?? 1;
   const cy = mode === 'stage' ? 1.32 : (bust ? 1.88 : 1.12) * b, half = mode === 'stage' ? 1.44 : (bust ? 0.42 : 1.25) * b;
   camera.top = half; camera.bottom = -half; camera.left = -half * (w / h); camera.right = half * (w / h);
   camera.position.set(Math.sin(0) * 10, cy + Math.sin(pitch) * 10, Math.cos(pitch) * 10);
@@ -61,8 +61,8 @@ export function renderHero(heroId, C, { w = 48, h = 48, mode = 'bust', yaw = 0.5
   return dst;
 }
 
-export function portraitURL(heroId, C, size = 40) {
-  return renderHero(heroId, C, { w: size, h: size, mode: 'bust' }).toDataURL();
+export function portraitURL(heroId, C, size = 40, loadout = null) {
+  return renderHero(heroId, C, { w: size, h: size, mode: 'bust', loadout }).toDataURL();
 }
 
 // A strip of frames for an action (sprite-sheet style)

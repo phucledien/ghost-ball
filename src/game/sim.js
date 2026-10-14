@@ -11,6 +11,8 @@ import { buildHero, applyPose, footWorld } from '../engine/hero-model.js';
 import { buildBall, buildItemCrate, buildMarker, buildArrow } from '../engine/props.js';
 import { POSES, actionPose, locomotionPose, lerpPose, totalDuration, phaseAt } from '../engine/anim.js';
 
+import { gaitStepLength, RUN_STANCE, HERO_SCALE } from '../engine/hero-motion.js';
+
 const STEP = 1 / 60;
 const G = 30; // ball gravity
 const BOT_NAMES = ['RIO', 'ZEN', 'KOA', 'VEX', 'MOR', 'TAJ', 'ODE', 'PIK', 'SUN', 'YUL', 'NIX', 'AXE'];
@@ -66,7 +68,7 @@ export class Match {
     const roster = [];
     if (this.humanHero) roster.push(this.humanHero);
     const pool = HEROES.map((h) => h.id);
-    while (roster.length < count) roster.push(pool[(roster.length * 7 + Math.floor(Math.random() * 6)) % pool.length]);
+    while (roster.length < count) roster.push(pool[C('art.benchmark')?roster.length%pool.length:(roster.length * 7 + Math.floor(Math.random() * 6)) % pool.length]);
     const names = [...BOT_NAMES].sort(() => Math.random() - 0.5);
     roster.forEach((hid, i) => this.addPlayer(hid, i === 0 && !!this.humanHero, i === 0 && this.humanHero ? 'YOU' : names[i % names.length]));
     this.layoutPlayers();
@@ -91,6 +93,18 @@ export class Match {
     };
     this.players.push(p);
     return p;
+  }
+
+  // Replace presentation only; preserve match state when art settings change.
+  refreshArt() {
+    for (const p of this.players) {
+      const old = p.model;
+      const model = buildHero(p.heroId, this.C, old.userData.loadout);
+      model.position.copy(old.position); model.rotation.copy(old.rotation);
+      model.visible = old.visible;
+      applyPose(model, p.pose);
+      this.group.remove(old); this.group.add(model); p.model = model;
+    }
   }
 
   layoutPlayers() {
@@ -134,7 +148,7 @@ export class Match {
     const mesh = buildBall(this.C('ball.size'));
     this.group.add(mesh);
     if (!decoy) this.group.add(mesh.userData.ring);
-    const b = { mesh, decoy, state: 'loose', owner: null, x: 0, y: 0.3, z: 0, vx: 0, vy: 0, vz: 0, lastPasser: null, prevHolder: null, immune: new Map(), homing: null, color: '#ffffff', stun: 0, knock: 0, fuse: this.C('rules.fuseTime'), looseT: 0, ts: 1, life: 0 };
+    const b = { mesh, decoy, state: 'loose', owner: null, x: 0, y: 0.3, z: 0, vx: 0, vy: 0, vz: 0, lastPasser: null, lastTouch: null, prevHolder: null, immune: new Map(), homing: null, color: '#ffffff', stun: 0, knock: 0, fuse: this.C('rules.fuseTime'), looseT: 0, ts: 1, life: 0 };
     if (decoy) this.decoys.push(b); else this.balls.push(b);
     return b;
   }
@@ -142,6 +156,8 @@ export class Match {
   // ── Main loop ──────────────────────────────────────────────────────────
   update(realDt) {
     realDt = Math.min(realDt, 0.1);
+    this.inputClock=(this.inputClock||0)+realDt;
+    this.bufferHumanInput();
     if (this.paused) { this.updateVisuals(0); return; }
     let scale = 1;
     if (this.slowT > 0) { this.slowT -= realDt; scale = this.C('fx.slowmo'); }
@@ -236,6 +252,7 @@ export class Match {
   explodeBall(b) {
     const pos = new THREE.Vector3(b.x, b.y, b.z);
     this.vfx.burst(pos, { count: 50, color: ['#ffffff', '#ffd84a', '#ff5a2a'], glow: true, speed: 12, up: 9, life: 0.7, size: 0.24 });
+    this.vfx.contact('elim',{x:pos.x,y:.08,z:pos.z},{x:0,z:1},'#ffd84a',2.5);
     this.vfx.ring(pos, { color: '#ffd84a', r0: 0.3, r1: 5, time: 0.5 });
     b.mesh.visible = false;
     b.mesh.userData.ring.visible = false;
@@ -327,6 +344,7 @@ export class Match {
     const grip = p.zone ? p.zone.accel : 1, slide = p.zone ? p.zone.friction : 1;
 
     // Movement
+    const previousX=p.x,previousZ=p.z;
     const sp = this.speedOf(p) * (p.charge >= 0 ? C('move.chargeMul') : 1) * (p.action?.moveMul ?? 1);
     if (p.t.blitz > 0) {
       p.vx = p.dashDir.x * C('hero.bolt.atk.speed');
@@ -380,8 +398,15 @@ export class Match {
     p.fx /= n; p.fz /= n;
 
     const spd = Math.hypot(p.vx, p.vz);
-    p.cyc += spd * dt * 2.1 / C('anim.run.stride');
-    if (spd > 4 && Math.random() < dt * 6) this.vfx.dust({ x: p.x - p.fx * 0.3, y: 0.05, z: p.z - p.fz * 0.3 }, 1, this.arena.theme.speck[1]);
+    const distance=Math.hypot(p.x-previousX,p.z-previousZ),previousCycle=p.cyc;
+    p.cyc += p.model.userData.artStyle==='master'
+      ? distance*2*Math.PI*RUN_STANCE/gaitStepLength(p.heroId,spd/C('move.speed'),C('anim.run.stride'))
+      : distance*2.1/C('anim.run.stride');
+    if(spd>4 && !p.action && !p.leap && Math.floor(previousCycle/Math.PI)!==Math.floor(p.cyc/Math.PI)){
+      const side=Math.floor(p.cyc/Math.PI)%2===0?1:-1,scale=HERO_SCALE[p.heroId]||[1,1,1];
+      const forward=gaitStepLength(p.heroId,spd/C('move.speed'),C('anim.run.stride'))/2+.1*scale[2];
+      this.vfx.dust({x:p.x+p.fx*forward+p.fz*.18*scale[0]*side,y:.03,z:p.z+p.fz*forward-p.fx*.18*scale[0]*side},2,this.arena.theme.speck[1]);
+    }
 
     // Charging pass
     if (p.charge >= 0) {
@@ -452,9 +477,41 @@ export class Match {
     }
   }
 
+  resetInput() {
+    if(this.human){this.human.inputBuffer={};this.human.charge=-1;}
+    this.input=null;
+  }
+
+  bufferHumanInput() {
+    const p=this.human,it=this.input;if(!p)return;
+    const q=p.inputBuffer ||= {};
+    if(this.paused || this.phase!=='play' || !p.alive){p.inputBuffer={};return;}
+    for(const key of Object.keys(q))if(q[key].until<this.inputClock)delete q[key];
+    if(!it)return;
+    for(const key of ['a','skill','item'])if(it[key+'Pressed']){
+      q[key]={until:this.inputClock+.2,aim:it.aim,mx:it.mx,mz:it.mz,released:!it.aHeld,slot:this.holding(p)?'atk':'def'};
+      it[key+'Pressed']=false;
+    }
+    if(q.a && it.aReleased)q.a.released=true;
+  }
+
   handleIntent(p, it) {
     const C = this.C;
     const ball = this.holding(p);
+    if(p.human){
+      const q=p.inputBuffer||{};
+      // Items can be used while running or during a skill animation.
+      if(q.item && p.item){this.useItem(p);delete q.item;}
+      if(q.skill && q.skill.slot!==(ball?'atk':'def'))delete q.skill;
+      if(q.skill && this.useSkill(p))delete q.skill;
+      if(q.a){
+        if(ball && p.lock<=0 && p.charge<0 && !p.action){p.charge=0;const press=q.a;delete q.a;if(press.released||!it.aHeld)this.releasePass(p,press.aim||it.aim);}
+        else if(!ball && p.cd.dash<=0 && !p.action){this.dash(p,it.mx,it.mz);delete q.a;}
+      }
+      if(ball && p.charge>=0 && (it.aReleased||!it.aHeld))this.releasePass(p,it.aim);
+      it.aReleased=false;
+      return;
+    }
     // A button: charge/pass when holding, dash otherwise
     if (ball) {
       if (it.aPressed && p.lock <= 0 && p.charge < 0 && !p.action) p.charge = 0;
@@ -477,7 +534,7 @@ export class Match {
       burst: () => {
         p.t.dash = C('move.dashTime');
         this.vfx.dust({ x: p.x, y: 0.1, z: p.z }, 8, this.arena.theme.speck[0]);
-        this.vfx.ring({ x: p.x, z: p.z }, { color: '#ffffff', r0: 0.2, r1: 1.2, time: 0.2, opacity: 0.6 });
+        this.vfx.contact('dash',{x:p.x,y:.06,z:p.z},p.dashDir,'#eee6d2');
       },
     });
     this.emit('dash', { player: p });
@@ -503,9 +560,9 @@ export class Match {
     const C = this.C;
     const id = p.item;
     p.item = null;
-    const col = ITEMS[id].color;
-    this.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.3, r1: 2.4, time: 0.35 });
-    this.vfx.burst({ x: p.x, y: 1, z: p.z }, { count: 18, color: [col, '#ffffff'], glow: true, speed: 5, up: 5, life: 0.5 });
+    if(!ITEMS[id])return;
+    let affected=0;
+    this.vfx.itemActivation(id,p,C('item.whistle.radius'));
     switch (id) {
       case 'cleats': p.t.cleats = C('item.cleats.dur'); break;
       case 'shield': p.t.shield = C('item.shield.dur'); break;
@@ -514,7 +571,7 @@ export class Match {
       case 'whistle': {
         const r = C('item.whistle.radius');
         for (const o of this.alive) if (o !== p && Math.hypot(o.x - p.x, o.z - p.z) < r) {
-          o.freeze = C('item.whistle.dur');
+          o.freeze = C('item.whistle.dur');affected++;
           this.vfx.burst({ x: o.x, y: 1, z: o.z }, { count: 14, color: ['#6af0ff', '#ffffff'], speed: 3, up: 3, life: 0.5 });
         }
         this.vfx.ring({ x: p.x, z: p.z }, { color: '#6af0ff', r0: 0.5, r1: r, time: 0.45 });
@@ -523,7 +580,7 @@ export class Match {
       }
       case 'overclock': p.cd.atk = p.cd.def = p.cd.dash = 0; break;
     }
-    this.emit('item', { player: p, id });
+    this.emit('item', { player: p, id, affected });
   }
 
   // ── Actions (animated, phase hooks) ────────────────────────────────────
@@ -540,11 +597,22 @@ export class Match {
     for (const ph of a.phases) {
       if (a.t >= acc && !a.fired.has(ph.name)) {
         a.fired.add(ph.name);
+        if(ph.contact)this.syncActionPose(p);
         a.hooks[ph.name]?.();
         if (p.action !== a) return;
       }
       acc += ph.dur;
     }
+  }
+
+  syncActionPose(p) {
+    const a=p.action;if(!a)return;
+    p.pose=actionPose(a.phases,a.t,a.amp,a.from);
+    p.poseAcc=0;
+    p.model.position.set(p.x,p.y,p.z);
+    p.model.rotation.y=Math.atan2(p.fx,p.fz);
+    applyPose(p.model,p.pose);
+    p.model.updateWorldMatrix(true,true);
   }
 
   stepAction(p, dt) {
@@ -616,8 +684,9 @@ export class Match {
     const now = this.time;
     ball.state = 'flight';
     ball.owner = null;
-    const foot = footWorld(p.model);
-    ball.x = p.x + dir.x * 0.55; ball.z = p.z + dir.z * 0.55; ball.y = Math.max(C('ball.size'), foot.y);
+    if(p.action)this.syncActionPose(p);
+    const foot = footWorld(p.model),contactOffset=C('ball.size')*.75;
+    ball.x = foot.x + dir.x*contactOffset; ball.z = foot.z + dir.z*contactOffset; ball.y = Math.max(C('ball.size'),foot.y);
     const sp = C('ball.passSpeed') * speedMul;
     ball.vx = dir.x * sp; ball.vz = dir.z * sp;
     ball.vy = o.flat ? 1 : Math.sqrt(2 * G * C('ball.lobApex') * (o.lob ?? 1));
@@ -625,6 +694,7 @@ export class Match {
     ball.immune.set(p.id, now + C('rules.passerImmune'));
     if (ball.prevHolder && ball.prevHolder !== p) ball.immune.set(ball.prevHolder.id, now + C('rules.passBackImmune'));
     ball.lastPasser = p;
+    ball.lastTouch = p;
     ball.stun = o.stun || 0;
     ball.knock = o.knock || 0;
     ball.color = o.color || C(`hero.${p.heroId}.fx`);
@@ -633,9 +703,9 @@ export class Match {
     ball.looseT = 0;
     ball.flightT = 0;
     // FX
-    const fpos = new THREE.Vector3(ball.x, 0.3, ball.z);
-    this.vfx.ring(fpos, { color: '#ffffff', r0: 0.2, r1: 1.2 + (o.charge || 0), time: 0.22, opacity: 0.7 });
-    this.vfx.burst(fpos, { count: 8 + Math.round((o.charge || 0) * 10), color: ['#ffffff', ball.color], glow: true, dir, spread: 0.5, speed: 7, up: 2, life: 0.3, size: 0.14 });
+    const fpos = new THREE.Vector3(ball.x, ball.y, ball.z);
+    this.vfx.contact('kick',fpos,dir,'#fff7e5',1+(o.charge||0)*.3);
+    this.vfx.burst(fpos, { count: 4 + Math.round((o.charge || 0) * 6), color: ['#ffffff', ball.color], glow: true, dir, spread: 0.5, speed: 7, up: 2, life: 0.3, size: 0.14 });
     this.vfx.dust({ x: p.x, y: 0.05, z: p.z }, 5, this.arena.theme.speck[0]);
     this.stage.shake(0.12 + (o.charge || 0) * 0.15);
     this.emit('pass', { player: p, target: o.target });
@@ -755,6 +825,7 @@ export class Match {
   }
 
   deflect(b, p) {
+    b.lastTouch=p;
     const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz) || 1;
     const sp = Math.max(6, Math.hypot(b.vx, b.vz) * 0.8);
     b.vx = (dx / d) * sp; b.vz = (dz / d) * sp; b.vy = 4;
@@ -765,8 +836,9 @@ export class Match {
     this.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.6, r1: 2.2, time: 0.3 });
     this.vfx.burst({ x: b.x, y: b.y, z: b.z }, { count: 20, color: [col, '#ffffff'], glow: true, speed: 6, up: 3, life: 0.35 });
     this.stage.shake(0.2);
-    if (p.t.shield > 0) p.t.shield = 0;
-    this.emit('deflect', { player: p });
+    const shieldConsumed=p.t.shield>0;
+    if (shieldConsumed) p.t.shield = 0;
+    this.emit('deflect', { player: p, shieldConsumed });
   }
 
   trapRedirect(b, p) {
@@ -792,6 +864,7 @@ export class Match {
     const now = this.time;
     b.state = 'held';
     b.owner = p;
+    b.lastTouch = p;
     b.homing = null;
     b.prevHolder = b.lastPasser;
     const lockMul = p.heroId === 'jinx' ? C('hero.jinx.passive.lockMul') : 1;
@@ -809,8 +882,8 @@ export class Match {
       this.startAction(p, 'catch', {}, { moveMul: 0.9, lockFacing: false });
     }
     this.hitstop = Math.max(this.hitstop, C('fx.hitstop') * Math.min(1.2, sp / 16));
-    this.vfx.ring({ x: p.x, z: p.z }, { color: b.color, r0: 0.3, r1: 1.8, time: 0.25 });
-    this.vfx.burst({ x: b.x, y: b.y, z: b.z }, { count: 10, color: [b.color, '#ffffff'], glow: true, speed: 4, up: 3, life: 0.3, size: 0.12 });
+    this.vfx.contact('catch',{x:b.x,y:Math.max(.08,b.y),z:b.z},{x:p.fx,z:p.fz},'#fff7e5');
+    this.vfx.burst({ x: b.x, y: b.y, z: b.z }, { count: 4, color: [b.color, '#ffffff'], glow: true, speed: 4, up: 3, life: 0.3, size: 0.12 });
     b.stun = 0; b.knock = 0;
     this.emit('catch', { player: p, from: b.lastPasser, ball: b, at: now });
   }
@@ -818,6 +891,7 @@ export class Match {
   giveBall(b, p, fresh = false) {
     b.state = 'held';
     b.owner = p;
+    b.lastTouch = p;
     b.lastPasser = null;
     b.prevHolder = null;
     b.mesh.visible = true;
@@ -843,6 +917,7 @@ export class Match {
         if (o.t.shield > 0 || o.t.crown > 0) { p.t.blitz = 0; this.kick(p, ball, { x: -p.dashDir.x, z: -p.dashDir.z }, 0.5); this.deflect(ball, o); return; }
         p.t.blitz = 0;
         ball.lastPasser = p;
+    ball.lastTouch = p;
         ball.prevHolder = p;
         ball.immune.set(p.id, this.time + this.C('rules.passBackImmune'));
         ball.stun = 0.25;
@@ -963,14 +1038,14 @@ export class Match {
       p.marker.position.set(p.x, 0, p.z);
       // Stepped animation (on 2s / 3s etc. when animFps < 60)
       p.poseAcc += dt;
-      if (p.poseAcc >= 1 / fps - 1e-4 || dt === 0) {
+      if (p.poseAcc >= 1 / fps - 1e-4 || dt === 0 || (p.action && phaseAt(p.action.phases,p.action.t).phase.contact)) {
         p.poseAcc = 0;
         const speed = Math.hypot(p.vx, p.vz) / (C('move.speed') || 1);
         let pose = locomotionPose(speed, p.cyc, C('anim.run.stride'), C('anim.run.bob'), {});
         if (p.charge >= 0) pose = lerpPose(pose, POSES.coil, Math.min(1, p.charge) * 0.85, {});
         if (p.stun > 0 || p.freeze > 0) pose = lerpPose(pose, POSES.stun, 0.9, {});
         if (p.action) {
-          const blendIn = Math.min(1, p.action.t / 0.04);
+          const blendIn = phaseAt(p.action.phases,p.action.t).phase.contact ? 1 : Math.min(1,p.action.t/.04);
           const ap = actionPose(p.action.phases, p.action.t, p.action.amp, p.action.from);
           const end = p.action.total - p.action.t;
           const blendOut = p.action.id === 'elim' ? 1 : Math.min(1, end / 0.06 + 0.0);
@@ -979,21 +1054,18 @@ export class Match {
         p.pose = pose;
         applyPose(m, pose);
       }
-      if (!p.alive) continue;
+      if (!p.alive) {if(p.shieldFx){p.shieldFx.dispose();p.shieldFx=null;}continue;}
       // Cloak flicker / freeze tint
       m.visible = !(p.t.cloak > 0 && Math.floor(this.time * 20) % 3 === 0) || p.human;
       // Shields
       const shielded = p.t.shield > 0 || p.t.crown > 0;
       if (shielded && !p.shieldFx) p.shieldFx = this.vfx.makeShield(p.t.crown > 0 ? C('hero.kaiz.fx') : ITEMS.shield.color);
-      if (!shielded && p.shieldFx) { p.shieldFx.dispose(); p.shieldFx = null; }
+      if (!shielded && p.shieldFx) { this.vfx.itemEnd('shield',p);p.shieldFx.dispose(); p.shieldFx = null; }
       if (p.shieldFx) {
         p.shieldFx.mesh.position.set(p.x, 0.95 + p.y, p.z);
-        p.shieldFx.mesh.rotation.y += dt * 2;
-        p.shieldFx.mesh.scale.setScalar(1 + Math.sin(this.time * 12) * 0.03);
+        p.shieldFx.update?.(Math.max(p.t.shield,p.t.crown),p.t.crown>p.t.shield?C('hero.kaiz.def.dur'):C('item.shield.dur'),dt);
       }
       if (p.t.trap > 0 && Math.random() < 0.5) this.vfx.trail({ x: p.x + (Math.random() - 0.5), y: 0.2 + Math.random() * 1.5, z: p.z + (Math.random() - 0.5) }, C('hero.echo.fx'), 0.12, 0.3);
-      if (p.freeze > 0 && Math.random() < 0.3) this.vfx.trail({ x: p.x + (Math.random() - 0.5) * 0.8, y: Math.random() * 1.6, z: p.z + (Math.random() - 0.5) * 0.8 }, '#bff6ff', 0.1, 0.3);
-      if (p.t.cleats > 0 && Math.hypot(p.vx, p.vz) > 2 && Math.random() < 0.4) this.vfx.trail({ x: p.x, y: 0.1, z: p.z }, ITEMS.cleats.color, 0.14, 0.35);
     }
 
     // Balls
@@ -1016,7 +1088,7 @@ export class Match {
       let heat = this.phase === 'play' && left < danger ? 1 - left / danger : 0;
       if (this.mode.timer === 'hidden' && this.phase === 'play') heat = 0.25 + 0.25 * Math.sin(this.time * 3);
       const pulse = 0.5 + 0.5 * Math.sin(this.time * (8 + heat * 18));
-      mesh.material.emissive.setRGB(heat * pulse * 0.9, heat * pulse * 0.15, 0);
+      mesh.material.userData.heatColor.setRGB(heat * pulse * 0.9, heat * pulse * 0.15, 0);
       ring.material.opacity = heat * (0.4 + 0.5 * pulse);
       ring.scale.setScalar(1 + pulse * 0.25 * heat);
     }
@@ -1027,6 +1099,8 @@ export class Match {
       it.mesh.userData.spin.position.y = 0.6 + Math.sin(this.time * 3 + it.x) * 0.1;
     }
 
+    this.vfx.syncItemEffects(this.players,dt);
+    this.vfx.syncBallWakes(this.balls,dt);
     // Camera
     this.updateCamera(dt);
   }

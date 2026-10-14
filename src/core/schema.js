@@ -59,6 +59,8 @@ num('camera.follow', 0.08, 0, 1, 0.01, 'Follow smoothing');
 num('camera.lookAhead', 1.6, 0, 6, 0.1, 'Look-ahead');
 bool('camera.followBall', true, 'Follow the ball (else you)');
 
+choice('art.heroStyle', 'master', ['master', 'legacy'], 'Hero art · Blender master / original');
+
 // ── Render ───────────────────────────────────────────────────────────────
 num('render.pixelScale', 3, 1, 8, 1, 'Pixel size');
 bool('render.shadows', true, 'Shadows');

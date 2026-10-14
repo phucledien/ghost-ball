@@ -2,7 +2,7 @@
 // A pose is a bag of joint angles (radians) + body offsets. Actions are a list
 // of phases; each phase eases from the previous phase's pose into its own.
 
-export const POSE_KEYS = ['y', 'squash', 'lean', 'twist', 'head', 'hipL', 'hipR', 'kneeL', 'kneeR', 'shL', 'shR', 'shLz', 'shRz', 'elL', 'elR'];
+export const POSE_KEYS = ['y', 'squash', 'lean', 'twist', 'head', 'hipL', 'hipR', 'kneeL', 'kneeR', 'ankleL', 'ankleR', 'shL', 'shR', 'shLz', 'shRz', 'elL', 'elR'];
 
 const P = (o) => Object.fromEntries(POSE_KEYS.map((k) => [k, o[k] ?? (k === 'squash' ? 1 : 0)]));
 
@@ -37,13 +37,13 @@ const ease = {
 };
 
 export function lerpPose(a, b, u, out = {}) {
-  for (const k of POSE_KEYS) out[k] = a[k] + (b[k] - a[k]) * u;
+  for (const k of POSE_KEYS) out[k] = (a[k] ?? 0) + ((b[k] ?? 0) - (a[k] ?? 0)) * u;
   return out;
 }
 
 export function scalePose(p, amp, out = {}) {
   const idle = POSES.idle;
-  for (const k of POSE_KEYS) out[k] = idle[k] + (p[k] - idle[k]) * amp;
+  for (const k of POSE_KEYS) out[k] = idle[k] + ((p[k] ?? 0) - idle[k]) * amp;
   return out;
 }
 
@@ -69,7 +69,8 @@ export function actionPose(phases, t, amp = 1, from = POSES.idle, out = {}) {
   const { index, phase, u } = phaseAt(phases, t);
   const prev = index === 0 ? from : scalePose(POSES[phases[index - 1].pose] || POSES.idle, amp);
   const target = scalePose(POSES[phase.pose] || POSES.idle, amp);
-  return lerpPose(prev, target, (ease[phase.type] || ease.move)(u), out);
+  // Contact phases hold their impact pose from the exact event boundary.
+  return lerpPose(prev, target, phase.contact ? 1 : (ease[phase.type] || ease.move)(u), out);
 }
 
 // Running / idle cycle. phase advances with distance travelled.
@@ -92,6 +93,8 @@ export function locomotionPose(speedNorm, cyc, stride = 1, bob = 1, out = {}) {
   out.shRz = 0.12 + 0.1 * s;
   out.elL = 0.2 + 0.9 * s;
   out.elR = 0.2 + 0.9 * s;
+  out.grounded=true;
+  out.gait={speed:s,phase:cyc,stride,bob};
   return out;
 }
 

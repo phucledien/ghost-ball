@@ -16,6 +16,8 @@ import { iconURL, itemIconURL, SKILL_ICON } from './icons.js';
 const COS = Object.values(import.meta.glob('../game/cosmetics.js', { eager: true }))[0] || {};
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const MODE_HINTS={classic:'Pass it on before the buzzer.',fuse:'Every second in possession burns.',twin:'Two balls. Two players at risk.',shrink:'Less room after every round.',sudden:'No countdown. Stay alert.'};
+const MAP_HINTS={temple:'Cover • lobs • hidden routes',egolab:'Boost lanes • sharp turns',frost:'Sliding • snow • pine cover',pitch:'Open space • pure footwork'};
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const seg5 = (n) => `<div class="seg5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>`;
 
@@ -39,8 +41,9 @@ export class Menu {
   get open() { return !!this.screen; }
 
   portrait(id, size = 64) {
-    const k = `${id}|${size}`;
-    if (!this.portraits.has(k)) this.portraits.set(k, portraitURL(id, this.C, size));
+    const loadout=this.loadoutFor(id);
+    const k = `${id}|${size}|${JSON.stringify(loadout)}`;
+    if (!this.portraits.has(k)) this.portraits.set(k, portraitURL(id, this.C, size, loadout));
     return this.portraits.get(k);
   }
   clearPortraits() { this.portraits.clear(); }
@@ -191,10 +194,10 @@ export class Menu {
   render_mode() {
     const body = `
       <div class="mode-list">${Object.entries(MODES).map(([id, m]) => `
-        <button class="tile mode-tile" data-mode="${id}"><img src="${iconURL(m.icon || 'ball', '#e8a93a', 3)}" alt=""><div><div class="tg">${m.tag}</div><div class="nm">${esc(m.name)}</div></div></button>`).join('')}
+        <button class="tile mode-tile" data-mode="${id}"><img src="${iconURL(m.icon || 'ball', '#e8a93a', 3)}" alt=""><div><div class="tg">${m.tag}</div><div class="nm">${esc(m.name)}</div><small>${MODE_HINTS[id]}</small></div></button>`).join('')}
       </div>
       <section class="panel mode-info"></section>`;
-    const n = this.selShell(0, 'sel-mode', body, 'NEXT ▶');
+    const n = this.selShell(0, 'sel-mode', body, 'CHOOSE STRIKER ▶');
     const info = n.querySelector('.mode-info');
     const pick = (id) => {
       this.picks.mode = id;
@@ -204,6 +207,7 @@ export class Menu {
       const timer = m.timer === 'fuse' ? `${C('rules.fuseTime')}s fuse` : m.timer === 'hidden' ? '?? hidden' : `${C('rules.roundTime')}s`;
       const players = Math.round(C('rules.players') + (m.playersBonus || 0));
       info.innerHTML = `
+        <div class="mode-visual" data-variant="${id}" aria-hidden="true"><div class="mini-pitch"><i class="halfway"></i><i class="centre"></i><span class="demo-player p1">01</span><span class="demo-player p2">02</span><span class="demo-player p3">03</span><span class="demo-player p4">04</span><span class="demo-ball"><img src="${iconURL('ball','#ffffff',2)}" alt=""></span>${m.balls===2?`<span class="demo-ball second"><img src="${iconURL('ball','#ffffff',2)}" alt=""></span>`:''}<i class="pass-route"></i></div><div class="mode-caption"><span>${id==='classic'?'START HERE':m.tag}</span><b>${MODE_HINTS[id]}</b></div><div class="mode-clock">${m.timer==='hidden'?'??':m.timer==='fuse'?'FUSE':'00:03'}</div></div>
         <div class="big"><img src="${iconURL(m.icon || 'ball', '#e8a93a', 6)}" alt=""><div><div class="tg">${m.tag}</div><h2>${esc(m.name)}</h2></div></div>
         <p>${esc(m.desc)}</p>
         <div class="stat-row">
@@ -212,7 +216,7 @@ export class Menu {
           <div><small>STRIKERS</small><b>${players}+</b></div>
           <div><small>PITCH</small><b>${m.shrink ? 'SHRINKS' : m.sizeMul ? `×${m.sizeMul}` : 'FULL'}</b></div>
         </div>
-        <ul class="rules">${(m.rules || []).map((r, i) => `<li><b>${i + 1}</b><span>${esc(r)}</span></li>`).join('')}</ul>`;
+        <h3 class="section-label">HOW YOU SURVIVE</h3><ul class="rules">${(m.rules || []).map((r, i) => `<li><b>${i + 1}</b><span>${esc(r)}</span></li>`).join('')}</ul>`;
       this.d.onPreview(this.picks);
     };
     const next = () => this.show('hero');
@@ -323,6 +327,7 @@ export class Menu {
   }
 
   bindLocker(info, id, redraw) {
+    const refresh=()=>{this.clearPortraits();const img=this.node?.querySelector(`[data-hero="${id}"] img`);if(img)img.src=this.portrait(id,64);redraw();};
     for (const row of info.querySelectorAll('.slot')) {
       const slot = COS.COSMETIC_SLOTS.find((s) => s.id === row.dataset.slot);
       for (const b of row.querySelectorAll('button')) {
@@ -334,7 +339,7 @@ export class Menu {
           all[id] = { ...(all[id] || {}), [slot.id]: slot.options[ni].id };
           this.d.onLoadout?.(id);
           const focusD = b.dataset.d;
-          redraw();
+          refresh();
           info.querySelector(`.slot[data-slot="${slot.id}"] button[data-d="${focusD}"]`)?.focus();
         };
       }
@@ -342,7 +347,7 @@ export class Menu {
     info.querySelector('.reset').onclick = () => {
       if (this.picks.loadouts) delete this.picks.loadouts[id];
       this.d.onLoadout?.(id);
-      redraw();
+      refresh();
     };
   }
 
@@ -355,17 +360,17 @@ export class Menu {
   render_map() {
     const body = `
       <div class="map-list">${MAP_IDS.map((id) => `
-        <button class="tile map-tile" data-map="${id}"><canvas data-schem="${id}"></canvas><div><div class="nm">${esc(MAPS[id].name)}</div><div class="sz">${MAPS[id].size} · ${MAPS[id].obstacles.length ? `${MAPS[id].obstacles.length} obstacles` : 'open pitch'}</div></div></button>`).join('')}
+        <button class="tile map-tile" data-map="${id}"><img class="map-thumb" src="${import.meta.env.BASE_URL}assets/maps/${id}.png" alt=""><div><div class="nm">${esc(MAPS[id].name)}</div><div class="sz">${MAP_HINTS[id]}</div></div></button>`).join('')}
       </div>
       <section class="panel map-info"></section>`;
     const n = this.selShell(2, 'sel-map', body, 'START ▶');
-    for (const cv of n.querySelectorAll('[data-schem]')) this.drawSchematic(cv, cv.dataset.schem, 2);
+
     const info = n.querySelector('.map-info');
     const pick = (id) => {
       this.picks.map = id;
       for (const t of n.querySelectorAll('[data-map]')) t.classList.toggle('on', t.dataset.map === id);
       const MD = MAPS[id];
-      info.innerHTML = `<div class="col"><canvas class="schem"></canvas><div class="chips"><span class="chip gold">${MD.size}</span><span class="chip" data-dims></span><span class="chip">${MD.playersBonus ? `+${MD.playersBonus} strikers` : 'standard roster'}</span></div></div><div class="col"><h2>${esc(MD.name)}</h2><p>${esc(MD.desc)}</p><div class="feats"></div></div>`;
+      info.innerHTML = `<div class="col arena-image"><img class="arena-beauty" src="${import.meta.env.BASE_URL}assets/maps/${id}.png" alt="Isometric view of ${esc(MD.name)}"><div class="chips"><span class="chip gold">${MD.size}</span><span class="chip" data-dims></span><span class="chip">${MD.obstacles.length} obstacles</span></div><details class="tactical"><summary>TACTICAL LAYOUT <span>View terrain & cover +</span></summary><canvas class="schem"></canvas><p>Top-down layout at the selected mode's scale.</p></details></div><div class="col arena-brief"><span class="section-label">${MAP_HINTS[id]}</span><h2>${esc(MD.name)}</h2><p>${esc(MD.desc)}</p><h3 class="section-label">PLAY THE TERRAIN</h3><div class="feats"></div><div class="map-ready"><span>${esc(MODES[this.picks.mode].name)} · ${HERO_BY_ID[this.picks.hero].name}</span><b>Ready for kick-off</b></div></div>`;
       const M = this.drawSchematic(info.querySelector('.schem'), id, 6);
       info.querySelector('[data-dims]').textContent = `${M.W} × ${M.D} m`;
       const T = THEMES[M.theme] || THEMES.temple;

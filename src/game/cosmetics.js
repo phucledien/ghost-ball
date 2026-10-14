@@ -101,8 +101,8 @@ export function kitColors(kitId, look, jersey) {
 }
 
 export const DEFAULT_LOADOUT = {
-  nova: { hair: 'spike', eyewear: 'none', headwear: 'headband', boots: 'whiteblack', accessory: 'armband', kit: 'home' },
-  bolt: { hair: 'long', eyewear: 'none', headwear: 'none', boots: 'neon', accessory: 'wristbands', kit: 'home' },
+  nova: { hair: 'spike', eyewear: 'none', headwear: 'none', boots: 'classic', accessory: 'none', kit: 'home' },
+  bolt: { hair: 'long', eyewear: 'none', headwear: 'none', boots: 'classic', accessory: 'wristbands', kit: 'home' },
   titan: { hair: 'buzz', eyewear: 'none', headwear: 'none', boots: 'blackgold', accessory: 'chain', kit: 'home' },
   jinx: { hair: 'bob', eyewear: 'goggles', headwear: 'none', boots: 'crimson', accessory: 'mismatch', kit: 'home' },
   echo: { hair: 'messy', eyewear: 'none', headwear: 'none', boots: 'ice', accessory: 'scarf', kit: 'home' },

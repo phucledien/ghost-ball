@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 
 const LOCKED = resolve(__dirname, 'config/locked.json');
 const HISTORY = resolve(__dirname, 'config/history');
@@ -46,13 +47,19 @@ function lockApi() {
 export default defineConfig({
   base: './', // relative asset URLs so the build works when hosted under any path
   plugins: [lockApi()],
+  cacheDir: process.env.GHOST_VITE_CACHE || resolve(os.homedir(), 'Library/Developer/CodexBuilds/ghost-ball/vite-cache'),
   // Locking writes config/*.json — don't let that hot-reload open pages.
   server: { port: 5173, watch: { ignored: ['**/config/**'] } },
   build: {
+    outDir: process.env.GHOST_BUILD_DIR || resolve(os.homedir(), 'Library/Developer/CodexBuilds/ghost-ball/dist'),
+    emptyOutDir: true,
     target: 'es2022', // top-level await; Safari 15+ / iOS 15+
     rollupOptions: {
       input: {
         game: resolve(__dirname, 'index.html'),
+        art: resolve(__dirname, 'art.html'),
+        showcase: resolve(__dirname, 'showcase.html'),
+        device: resolve(__dirname, 'device.html'),
         editor: resolve(__dirname, 'editor.html'),
         sheet: resolve(__dirname, 'sheet.html'),
       },

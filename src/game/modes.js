@@ -17,7 +17,7 @@ export const MODES = {
     name: 'Twin Ego', tag: 'VARIANT B',
     desc: 'Two balls, more players, bigger pitch. Two people can drop out each round.',
     balls: 2, timer: 'round', shrink: false, playersBonus: 2, sizeMul: 1.2, icon: 'split',
-    rules: ['Two balls live at once', 'Two more strikers, 20% bigger pitch', 'Up to two players drop each round', 'Watch both: the arrow points at the nearest'],
+    rules: ['Two balls live at once', 'Two more strikers, 20% bigger pitch', 'Up to two players drop each round', 'Watch both: numbered arrows track each ball'],
   },
   shrink: {
     name: 'Last Field', tag: 'VARIANT C',

@@ -67,6 +67,14 @@ const CYL6 = new THREE.CylinderGeometry(1, 1, 1, 6);
 const CONE6 = new THREE.ConeGeometry(1, 1, 6);
 const CONE8 = new THREE.ConeGeometry(1, 1, 8);
 const DODECA = new THREE.DodecahedronGeometry(1, 0);
+// One fractured shoulder on an eight-sided drum, bounded by the unit cylinder.
+const BROKEN_CYL8 = CYL8.clone();
+for (let i = 0; i < BROKEN_CYL8.attributes.position.count; i++) {
+  const p = BROKEN_CYL8.attributes.position;
+  if (p.getY(i) > 0) p.setY(i, .5 - Math.max(0, p.getX(i) + p.getZ(i)) * .24);
+}
+BROKEN_CYL8.computeVertexNormals();
+const PEAK5 = new THREE.ConeGeometry(1, 1, 5);
 
 // ── Pitch texture ────────────────────────────────────────────────────────
 function paintField(W, D, T, zones) {
@@ -74,17 +82,42 @@ function paintField(W, D, T, zones) {
   const cv = document.createElement('canvas');
   cv.width = cw; cv.height = ch;
   const g = cv.getContext('2d');
-  const r = rng(7);
   g.fillStyle = T.ground; g.fillRect(0, 0, cw, ch);
-  for (let i = 0; i < cw * ch * 0.05; i++) {
-    g.fillStyle = T.speck[(r() * T.speck.length) | 0];
-    const x = (r() * cw) | 0, y = (r() * ch) | 0;
-    g.fillRect(x, y, 1, 1);
-    if (r() < 0.25) g.fillRect(x + 1, y, 1, 1);
-  }
-  if (T === THEMES.egolab) {
-    g.fillStyle = 'rgba(255,255,255,0.05)';
-    for (let x = 0; x < cw; x += PX * 4) if ((x / (PX * 4)) % 2 === 0) g.fillRect(x, 0, PX * 2, ch);
+  const rect = (x, y, w, h, color) => { g.fillStyle = color; g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
+  const polygon = (points, color) => {
+    g.fillStyle = color; g.beginPath();
+    points.forEach(([x,y], i) => i ? g.lineTo(Math.round(x),Math.round(y)) : g.moveTo(Math.round(x),Math.round(y)));
+    g.closePath(); g.fill();
+  };
+  if (T === THEMES.temple) {
+    // Large worn slabs and a stepped sand wash. No high-frequency random speckle.
+    const tile = PX * 4;
+    for (let y = 0; y < ch; y += tile) for (let x = -((y / tile) % 2) * tile / 2; x < cw; x += tile) {
+      rect(x, y, tile - 1, tile - 1, ((x / (tile / 2) + y / tile) % 3) ? T.paving : T.speck[0]);
+    }
+    const e = PX * 2.3;
+    polygon([[e+8,e],[cw-e-15,e],[cw-e-15,e+7],[cw-e,e+7],[cw-e,ch-e-12],[cw-e-9,ch-e-12],[cw-e-9,ch-e],[e+15,ch-e],[e+15,ch-e-7],[e,ch-e-7],[e,e+12],[e+8,e+12]],T.ground);
+    polygon([[cw*.17,ch*.17],[cw*.73,ch*.17],[cw*.73,ch*.23],[cw*.85,ch*.23],[cw*.85,ch*.66],[cw*.79,ch*.66],[cw*.79,ch*.82],[cw*.25,ch*.82],[cw*.25,ch*.75],[cw*.15,ch*.75],[cw*.15,ch*.35],[cw*.17,ch*.35]],T.sand);
+    // A continuous inset belongs to the perimeter, leaving player lanes quiet.
+    rect(2,2,cw-4,2,T.inset);rect(2,ch-4,cw-4,2,T.inset);
+    rect(2,2,2,ch-4,T.inset);rect(cw-4,2,2,ch-4,T.inset);
+  } else if (T === THEMES.egolab) {
+    const tile = PX * 6;
+    for (let y=0;y<ch;y+=tile) for(let x=0;x<cw;x+=tile) {
+      rect(x+1,y+1,tile-2,tile-2,((x+y)/tile)%2 ? T.ground : T.paving);
+      // Short recessed panel corner slots, not a bright full-floor grid.
+      rect(x+2,y+2,5,1,T.grout);rect(x+2,y+2,1,5,T.grout);
+    }
+    for(let x=PX*2;x<cw-PX*2;x+=PX*6){rect(x,2,PX*2,2,T.inset);rect(x,ch-4,PX*2,2,T.inset);}
+  } else if (T === THEMES.frost) {
+    // Packed central snow with broad wind-loaded margins, always inside the pitch.
+    for (let x=0;x<cw;x+=PX*4) {
+      const depth=PX*(1.4+((x/(PX*4))%3)*.35);
+      rect(x,0,PX*4,depth,T.speck[1]);rect(x,ch-depth,PX*4,depth,T.speck[1]);
+    }
+    rect(0,0,PX*1.4,ch,T.speck[1]);rect(cw-PX*1.4,0,PX*1.4,ch,T.speck[1]);
+    // Two deliberately sparse creases in packed snow.
+    for (const [u,v] of [[.19,.35],[.72,.66]]) polygon([[cw*u,ch*v],[cw*u+PX*3,ch*v-2],[cw*u+PX*4,ch*v+1],[cw*u+PX*2,ch*v]],T.speck[0]);
   }
   const U = (u) => Math.round(u * PX);
   const toPx = (x, z) => [cw / 2 + x * PX, ch / 2 + z * PX];
@@ -94,9 +127,12 @@ function paintField(W, D, T, zones) {
     const cols = T.zone[q.kind] || ['#888'];
     const [x0, y0] = toPx(q.x - q.w / 2, q.z - q.d / 2);
     const w = q.w * PX, h = q.d * PX;
-    // pixel-rounded corners
-    g.fillStyle = cols[0];
-    g.fillRect(x0 + 2, y0, w - 4, h); g.fillRect(x0, y0 + 2, w, h - 4); g.fillRect(x0 + 1, y0 + 1, w - 2, h - 2);
+    // The full subdued footprint retains the exact rectangular terrain boundary.
+    rect(x0,y0,w,h,cols[0]);
+    if (q.kind === 'mud' || q.kind === 'snow' || q.kind === 'grass') {
+      // Grouped stepped lobes soften the interior without implying extra collision.
+      polygon([[x0+3,y0+5],[x0+w*.35,y0+5],[x0+w*.35,y0+2],[x0+w-5,y0+2],[x0+w-5,y0+h*.45],[x0+w-2,y0+h*.45],[x0+w-2,y0+h-4],[x0+w*.6,y0+h-4],[x0+w*.6,y0+h-2],[x0+5,y0+h-2],[x0+5,y0+h*.65],[x0+2,y0+h*.65],[x0+2,y0+5]],cols[2] || cols[1]);
+    }
     if (q.kind === 'boost') {
       // chevrons pointing along the long axis
       g.fillStyle = cols[1];
@@ -113,14 +149,31 @@ function paintField(W, D, T, zones) {
       if (along) { g.fillRect(x0 + 2, y0 + 1, w - 4, 1); g.fillRect(x0 + 2, y0 + h - 2, w - 4, 1); }
       else { g.fillRect(x0 + 1, y0 + 2, 1, h - 4); g.fillRect(x0 + w - 2, y0 + 2, 1, h - 4); }
     } else if (q.kind === 'ice') {
-      for (let i = 0; i < w * h * 0.03; i++) { g.fillStyle = cols[1]; g.fillRect(x0 + 2 + r() * (w - 4), y0 + 2 + r() * (h - 4), 2, 1); }
-      g.fillStyle = cols[2];
-      for (let s = 0; s < w + h; s += 9) for (let k = 0; k < 5; k++) {
-        const x = x0 + s - k, y = y0 + 2 + k * 2;
-        if (x > x0 + 2 && x < x0 + w - 3) g.fillRect(x, y, 1, 2);
+      // Three large reflections read as an ice sheet at the gameplay camera.
+      g.fillStyle = cols[1];
+      g.fillRect(x0 + 2, y0 + h - 4, w - 4, 2);
+      g.fillRect(x0 + w - 4, y0 + 2, 2, h - 6);
+      if (T === THEMES.frost) {
+        for(const [u,v,flip] of [[.24,.28,1],[.62,.64,-1]]) {
+          const x=x0+w*u,y=y0+h*v;
+          polygon([[x,y],[x+w*.13,y+flip*3],[x+w*.19,y+flip*2],[x+w*.27,y+flip*8],[x+w*.19,y+flip*4],[x+w*.12,y+flip*5]],cols[1]);
+        }
       }
+      g.fillStyle = cols[2];
+      for (let i = 0; i < 3; i++) {
+        const x = Math.round(x0 + w * (.17 + i * .27));
+        const y = Math.round(y0 + h * (.27 + (i % 2) * .3));
+        g.fillRect(x, y, Math.max(3, Math.round(w * .15)), 1);
+        g.fillRect(x - 2, y + 1, 3, 1);
+      }
+    } else if (q.kind === 'snow' && T === THEMES.frost) {
+      g.fillStyle = cols[2];
+      g.fillRect(x0 + 2, y0 + h - 3, w - 4, 2);
+      g.fillStyle = cols[1];
+      g.fillRect(x0 + 3, y0 + 2, w - 6, Math.max(1, h * .3 | 0));
     } else {
-      for (let i = 0; i < w * h * 0.12; i++) { g.fillStyle = cols[1 + ((r() * (cols.length - 1)) | 0)] || cols[0]; g.fillRect(x0 + 1 + r() * (w - 2), y0 + 1 + r() * (h - 2), 1, 1); }
+      // A few broad contour ridges replace random stipple inside sand and grass.
+      for (let i=0;i<3;i++) rect(x0+w*(.13+i*.22),y0+h*(.27+(i%2)*.35),Math.max(3,w*.17),1,cols[1]);
     }
   }
 
@@ -159,6 +212,30 @@ function buildObstacle(B, o, T, r) {
   const O = T.obs;
   switch (o.kind) {
     case 'pillar': {
+      if(T===THEMES.temple){
+        const turn = ((Math.round(Math.abs(o.x)+Math.abs(o.z)) % 3)-1)*Math.PI/4;
+        B.add(CYL8,O.stoneDark,o.x,.12,o.z,{sx:o.r,sy:.24,sz:o.r,ry:Math.PI/8});
+        B.add(CYL8,O.stone,o.x,o.h*.49,o.z,{sx:o.r*.84,sy:o.h*.76,sz:o.r*.84,ry:Math.PI/8});
+        B.add(CYL8,O.inset,o.x,.30,o.z,{sx:o.r*.91,sy:.13,sz:o.r*.91,ry:Math.PI/8});
+        B.add(CYL8,O.stoneDark,o.x,o.h*.72,o.z,{sx:o.r*.86,sy:.14,sz:o.r*.86,ry:Math.PI/8});
+        B.add(CYL8,O.inset,o.x,o.h*.72,o.z,{sx:o.r*.865,sy:.065,sz:o.r*.865,ry:Math.PI/8});
+        B.add(BROKEN_CYL8,O.stoneTop,o.x,o.h-.20,o.z,{sx:o.r*.97,sy:.40,sz:o.r*.97,ry:turn});
+        // Recessed panels face the four cardinal directions and stay inside the radius.
+        for(let k=0;k<4;k++) {
+          const a=k*Math.PI/2,rad=o.r*.777;
+          B.box(o.r*.32,o.h*.32,.025,O.stoneDark,o.x+Math.sin(a)*rad,o.h*.45,o.z+Math.cos(a)*rad,{ry:a,cast:false});
+          B.box(o.r*.11,o.h*.23,.028,O.inset,o.x+Math.sin(a)*rad,o.h*.45,o.z+Math.cos(a)*rad,{ry:a,cast:false});
+        }
+        break;
+      }
+      if (T === THEMES.egolab) {
+        // A sealed octagonal terminal, fully inside its circular collision radius.
+        B.add(CYL8, O.stoneDark, o.x, .10, o.z, { sx: o.r, sy: .20, sz: o.r, ry: Math.PI / 8 });
+        B.add(CYL8, O.stone, o.x, o.h / 2, o.z, { sx: o.r * .9, sy: o.h - .20, sz: o.r * .9, ry: Math.PI / 8 });
+        B.add(CYL8, O.stoneTop, o.x, o.h - .08, o.z, { sx: o.r, sy: .16, sz: o.r, ry: Math.PI / 8 });
+        B.box(o.r * .65, .12, .025, O.light, o.x, o.h * .70, o.z + o.r * .83, { glow: true });
+        break;
+      }
       // fluted column with a cracked top drum and a base plinth
       B.add(CYL8, O.stoneDark, o.x, 0.15, o.z, { sx: o.r * 1.25, sy: 0.3, sz: o.r * 1.25 });
       const h = o.h - 0.3;
@@ -171,10 +248,25 @@ function buildObstacle(B, o, T, r) {
       break;
     }
     case 'rock':
+      if (T === THEMES.frost || T === THEMES.temple) {
+        B.add(DODECA, O.stoneDark, o.x, o.h * .43, o.z, { sx: o.r * .98, sy: o.h * .48, sz: o.r * .98, ry: Math.PI / 5 });
+        B.add(DODECA, O.stoneTop, o.x, o.h * .76, o.z, { sx: o.r * .82, sy: o.h * .24, sz: o.r * .82, ry: Math.PI / 5 });
+        break;
+      }
       B.add(DODECA, O.stoneDark, o.x, o.h * 0.45, o.z, { sx: o.r, sy: o.h * 0.6, sz: o.r * 0.9, ry: r() * 3 });
       B.add(DODECA, O.stone, o.x - o.r * 0.3, o.h * 0.7, o.z + 0.1, { sx: o.r * 0.6, sy: o.h * 0.4, sz: o.r * 0.6, ry: r() * 3 });
       break;
     case 'tree': {
+      if (T === THEMES.frost) {
+        // Three overlapping, aligned boughs make one pine silhouette. No random rotation.
+        B.add(CYL6, O.trunk, o.x, o.h * .20, o.z, { sx: o.r * .22, sy: o.h * .40, sz: o.r * .22 });
+        const tiers = [[.38, .48, 1], [.60, .43, .76], [.81, .38, .50]];
+        for (const [y, h, radius] of tiers) {
+          B.add(CONE6, y < .5 ? O.leaf2 : O.leaf, o.x, o.h * y, o.z, { sx: o.r * radius, sy: o.h * h, sz: o.r * radius, ry: Math.PI / 6 });
+          B.add(CONE6, O.stoneTop, o.x, o.h * (y + h * .24), o.z, { sx: o.r * radius * .52, sy: o.h * h * .52, sz: o.r * radius * .52, ry: Math.PI / 6, cast: false });
+        }
+        break;
+      }
       B.add(CYL6, O.trunk, o.x, 0.4, o.z, { sx: 0.18, sy: 0.8, sz: 0.18 });
       const tiers = 3;
       for (let i = 0; i < tiers; i++) {
@@ -186,12 +278,48 @@ function buildObstacle(B, o, T, r) {
       break;
     }
     case 'block': {
-      B.box(o.w, o.h, o.d, O.stone, o.x, o.h / 2, o.z);
-      B.box(o.w + 0.08, 0.16, o.d + 0.08, O.stoneTop, o.x, o.h - 0.08, o.z, { cast: false });
-      B.box(o.w + 0.12, 0.18, o.d + 0.12, O.stoneDark, o.x, 0.09, o.z, { cast: false });
+      if (T === THEMES.egolab) {
+        B.box(o.w, o.h-.12, o.d*.92, O.stoneDark, o.x, (o.h-.12) / 2, o.z);
+        B.box(o.w * .82, o.h * .84, o.d, O.stone, o.x, o.h * .5, o.z);
+        B.box(o.w, .12, o.d, O.stoneTop, o.x, o.h - .06, o.z, { cast: false });
+        B.box(o.w * .50, .09, .015, O.light, o.x, o.h * .76, o.z + o.d / 2 - .0075, { glow: true });
+        break;
+      }
+      if(T===THEMES.temple) {
+        const bandY=o.h*.72;
+        B.box(o.w,bandY-.05,o.d,O.stone,o.x,(bandY-.05)/2,o.z);
+        const upper=o.h-.16-bandY-.05;
+        B.box(o.w,upper,o.d,O.stone,o.x,bandY+.05+upper/2,o.z);
+      } else B.box(o.w, o.h-.16, o.d, O.stone, o.x, (o.h-.16) / 2, o.z);
+      B.box(o.w, 0.16, o.d, O.stoneTop, o.x, o.h - 0.08, o.z, { cast: false });
+      B.box(o.w, 0.18, o.d, O.stoneDark, o.x, 0.09, o.z, { cast: false });
+      if(T===THEMES.temple) B.box(o.w,.10,o.d,O.inset,o.x,o.h*.72,o.z,{cast:false});
       break;
     }
     case 'low': {
+      if(T===THEMES.temple){
+        const bandY=o.h*.65,bandH=.07;
+        B.box(o.w,bandY-bandH/2,o.d,O.stone,o.x,(bandY-bandH/2)/2,o.z);
+        const upper=o.h-.10-bandY-bandH/2;
+        B.box(o.w,upper,o.d,O.stone,o.x,bandY+bandH/2+upper/2,o.z);
+        B.box(o.w,.10,o.d,O.stoneTop,o.x,o.h-.05,o.z,{cast:false});
+        B.box(o.w,.07,o.d,O.stoneDark,o.x,.035,o.z,{cast:false});
+        B.box(o.w,.07,o.d,O.inset,o.x,o.h*.65,o.z,{cast:false});
+        // Inlaid joints, not alternating-height checkerboard blocks.
+        const along=o.w>=o.d,n=Math.max(1,Math.round(Math.max(o.w,o.d)/.95));
+        for(let i=1;i<n;i++){
+          const u=i/n-.5;
+          B.box(along?.026:o.w,o.h-.15,along?o.d:.026,O.stoneDark,o.x+(along?u*o.w:0),o.h*.48,o.z+(along?0:u*o.d),{cast:false});
+        }
+        break;
+      }
+      if (T === THEMES.egolab) {
+        B.box(o.w, o.h, o.d, O.stoneDark, o.x, o.h / 2, o.z);
+        B.box(o.w, .10, o.d, O.stoneTop, o.x, o.h - .05, o.z, { cast: false });
+        const along = o.w >= o.d;
+        B.box(along ? o.w * .60 : .07, .012, along ? .07 : o.d * .60, O.light, o.x, o.h - .006, o.z, { glow: true });
+        break;
+      }
       // knee-high wall: blocks flat passes, lobs fly over
       const n = Math.max(1, Math.round(Math.max(o.w, o.d) / 0.7));
       const along = o.w >= o.d;
@@ -205,6 +333,17 @@ function buildObstacle(B, o, T, r) {
       break;
     }
     case 'crate': {
+      if (T === THEMES.egolab) {
+        B.box(o.w*.88, o.h-.12, o.d*.88, O.crateTrim, o.x, (o.h-.12) / 2, o.z);
+        for(const a of [-1,1])for(const b of [-1,1]) B.box(o.w*.06,o.h-.12,o.d*.06,O.crateTrim,o.x+a*o.w*.47,(o.h-.12)/2,o.z+b*o.d*.47);
+        B.box(o.w * .88, o.h * .72, o.d, O.crate, o.x, o.h * .50, o.z);
+        B.box(o.w, o.h * .72, o.d * .88, O.crate, o.x, o.h * .50, o.z);
+        B.box(o.w, .12, o.d, O.stoneTop, o.x, o.h - .06, o.z, { cast: false });
+        // A single inset status strip on two faces, rather than a neon outline.
+        B.box(o.w * .38, .08, .012, O.light, o.x, o.h * .66, o.z + o.d / 2 - .006, { glow: true });
+        B.box(.012, .08, o.d * .38, O.light, o.x + o.w / 2 - .006, o.h * .66, o.z, { glow: true });
+        break;
+      }
       B.box(o.w, o.h, o.d, O.crate, o.x, o.h / 2, o.z);
       // trim bands + a glowing stencil stripe
       B.box(o.w + 0.06, 0.12, o.d + 0.06, O.crateTrim, o.x, o.h - 0.1, o.z, { cast: false });
@@ -215,9 +354,10 @@ function buildObstacle(B, o, T, r) {
     }
     case 'ice': {
       const c = T.obs.ice || '#a6dcf2';
-      B.box(o.w, o.h, o.d, c, o.x, o.h / 2, o.z, { ry: 0 });
-      B.box(o.w * 0.6, o.h * 0.5, o.d * 0.6, '#eaf8ff', o.x + o.w * 0.15, o.h + o.h * 0.2, o.z - o.d * 0.1, { ry: 0.4 });
-      B.box(o.w + 0.1, 0.12, o.d + 0.1, '#ffffff', o.x, o.h, o.z, { cast: false });
+      B.box(o.w, o.h-.12, o.d*.90, O.stoneDark, o.x, (o.h-.12) / 2, o.z);
+      B.box(o.w * .88, o.h-.24, o.d, c, o.x, o.h*.5, o.z);
+      B.box(o.w, .12, o.d, O.stoneTop, o.x, o.h - .06, o.z, { cast: false });
+      B.box(.07, o.h * .45, .012, '#d4eaf2', o.x - o.w * .18, o.h * .60, o.z + o.d / 2 - .006, { cast: false });
       break;
     }
     default:
@@ -230,23 +370,37 @@ function buildObstacle(B, o, T, r) {
 function dressZone(B, q, T, r) {
   if (q.kind === 'grass') {
     const cols = T.zone.grass;
-    const n = Math.round(q.w * q.d * 2.6);
+    const n = Math.round(q.w * q.d * (T===THEMES.temple?.65:2.6));
     for (let i = 0; i < n; i++) {
       const x = q.x + (r() - 0.5) * (q.w - 0.3), z = q.z + (r() - 0.5) * (q.d - 0.3);
-      const h = 0.55 + r() * 0.5;
+      const h = T===THEMES.temple ? .40+r()*.38 : .55+r()*.5;
+      if(T===THEMES.temple){
+        // Three broad blades make one readable clump, with visible gaps between clumps.
+        for(let blade=-1;blade<=1;blade++)B.box(.10,h*(blade===0?1:.72),.11,cols[blade+1],x+blade*.12,h*(blade===0?.5:.36),z,{rz:-blade*.20,ry:.35,cast:false});
+        continue;
+      }
       B.add(CONE6, cols[(r() * cols.length) | 0], x, h / 2, z, { sx: 0.16, sy: h, sz: 0.16, ry: r() * 3, rx: (r() - 0.5) * 0.3, cast: false });
     }
   } else if (q.kind === 'snow') {
+    if (T === THEMES.frost) {
+      // Four broad shallow drifts; clear gaps reveal the zone footprint underneath.
+      for (const [u, v, size] of [[-.27, -.24, .8], [.22, -.18, 1], [-.18, .24, 1], [.29, .26, .65]]) {
+        B.add(DODECA, T.zone.snow[1], q.x + u * q.w, .03, q.z + v * q.d, {
+          sx: q.w * .22 * size, sy: .15 * size, sz: q.d * .24 * size, ry: Math.PI / 6, cast: false,
+        });
+      }
+      return;
+    }
     const n = Math.round(q.w * q.d * 0.5);
     for (let i = 0; i < n; i++) {
       const x = q.x + (r() - 0.5) * (q.w - 0.6), z = q.z + (r() - 0.5) * (q.d - 0.6);
       B.add(DODECA, T.zone.snow[(r() * T.zone.snow.length) | 0], x, 0.05, z, { sx: 0.35 + r() * 0.3, sy: 0.18 + r() * 0.12, sz: 0.35 + r() * 0.3, ry: r() * 3, cast: false });
     }
   } else if (q.kind === 'mud') {
-    const n = Math.round(q.w * q.d * 0.25);
+    const n = Math.max(2,Math.round(q.w * q.d * .10));
     for (let i = 0; i < n; i++) {
       const x = q.x + (r() - 0.5) * (q.w - 0.6), z = q.z + (r() - 0.5) * (q.d - 0.6);
-      B.add(DODECA, T.zone.mud[(r() * T.zone.mud.length) | 0], x, 0.02, z, { sx: 0.3 + r() * 0.3, sy: 0.1, sz: 0.3 + r() * 0.3, ry: r() * 3, cast: false });
+      B.add(DODECA, T.zone.mud[(r() * T.zone.mud.length) | 0], x, 0.02, z, { sx: 0.6 + r() * 0.3, sy: 0.055, sz: 0.35 + r() * 0.3, ry: r() * 3, cast: false });
     }
   } else if (q.kind === 'boost') {
     // emitter posts at both ends
@@ -255,6 +409,79 @@ function dressZone(B, q, T, r) {
       const x = q.x + (along ? s * (q.w / 2 + 0.25) : 0), z = q.z + (along ? 0 : s * (q.d / 2 + 0.25));
       B.box(0.3, 0.5, 0.3, '#1d2a4c', x, 0.25, z);
       B.box(0.32, 0.1, 0.32, T.zone.boost[1], x, 0.45, z, { cast: false, glow: true });
+    }
+  }
+}
+
+// Architectural identity sits outside the playable rectangle. It shares the
+// existing static batches and casts no shadow into the playable court.
+function dressPerimeter(B, T, W, D) {
+  const far = -D / 2 - 8.6, O = T.obs;
+  const flat = { cast: false };
+  if (T === THEMES.temple) {
+    // A tiered sandstone entry gate, its negative space framing a teal sun seal.
+    B.box(12.6,4.5,4.8,T.plinth,0,.45,far,flat);
+    B.box(12,.45,4.4,O.stoneDark,0,2.7,far,flat);
+    for(const side of [-1,1]) {
+      const x=side*4.3;
+      B.box(2.1,5.2,2.1,O.stone,x,5.5,far,flat);
+      B.box(2.5,.38,2.5,O.stoneTop,x,3.05,far,flat);
+      B.box(2.5,.40,2.5,O.stoneTop,x,8.05,far,flat);
+      B.box(2.12,.32,2.12,O.inset,x,6.65,far,flat);
+      B.box(.9,2.7,.10,O.stoneDark,x,5.45,far+1.06,flat);
+      B.box(.40,2.25,.12,O.inset,x,5.45,far+1.07,flat);
+    }
+    B.box(11.6,.70,2.8,O.stoneTop,0,8.50,far,flat);
+    B.box(10.4,.22,2.55,O.inset,0,8.06,far,flat);
+    B.box(9.4,.45,2.2,O.stone,0,9.05,far,flat);
+    B.add(CYL8,O.inset,0,8.55,far+1.43,{sx:1.02,sy:.14,sz:1.02,rx:Math.PI/2,cast:false});
+    B.add(CYL8,O.stoneTop,0,8.55,far+1.52,{sx:.52,sy:.09,sz:.52,rx:Math.PI/2,cast:false});
+    // Fixed heraldic cloth, two broad tails; no animated geometry or bright foreground props.
+    for(const side of [-1,1]) {
+      const x=side*(W*.34),z=-D/2-2.05;
+      B.box(.17,4.4,.17,T.post,x,2.2,z,flat);
+      B.box(1.7,.12,.12,O.stoneTop,x,4.25,z,flat);
+      B.box(1.35,2.1,.07,O.inset,x,3.12,z,flat);
+      B.box(.53,.36,.07,O.inset,x-.41,1.89,z,flat);
+      B.box(.53,.36,.07,O.inset,x+.41,1.89,z,flat);
+      B.box(.15,1.28,.08,O.stoneTop,x,3.12,z+.01,flat);
+      B.box(.72,.16,.08,O.stoneTop,x,3.12,z+.015,flat);
+    }
+  } else if(T===THEMES.egolab) {
+    // A modular technical gantry, with only small status panels emitting light.
+    const span=W*.86,height=7.1;
+    for(const x of [-span/2,0,span/2]) {
+      B.box(.75,height,1.1,O.stoneDark,x,height/2,far,flat);
+      B.box(1.4,.40,1.6,O.stone,x,.20,far,flat);
+      B.box(.16,3,.13,O.stoneTop,x,height*.62,far+.59,flat);
+    }
+    B.box(span+1.6,.75,1.4,O.stoneDark,0,height,far,flat);
+    B.box(span+1.6,.18,1.5,O.stoneTop,0,height+.43,far,flat);
+    for(let i=-2;i<=2;i++) {
+      const x=i*span/5;
+      B.box(span/5-.4,1.8,.45,O.stoneDark,x,height-1.2,far,flat);
+      B.box(span/5-.8,1.30,.08,T.ground,x,height-1.2,far+.26,flat);
+      B.box(span/5-1.4,.09,.09,O.light,x,height-.70,far+.31,{glow:true});
+      for(let k=0;k<3;k++)B.box(.15,.42+k*.12,.10,O.stoneTop,x-.55+k*.45,height-1.35,far+.31,flat);
+    }
+    // Low service rails only on the far perimeter, never inside the playing rectangle.
+    B.box(W,.16,.22,O.stoneDark,0,1.6,-D/2-1.7,flat);
+    for(let x=-W/2;x<=W/2;x+=5.5)B.box(.14,1.6,.14,O.stone,x,.8,-D/2-1.7,flat);
+  } else if(T===THEMES.frost) {
+    // Three large, faceted alpine masses beyond the stands. Snow stays in broad caps.
+    for(const [u,h,width] of [[-.38,10,9],[.02,14,11],[.39,9,8]]) {
+      const x=W*u,z=far-6;
+      B.add(DODECA,T.rock,x,-2.4,z,{sx:width*1.1,sy:4,sz:width*.7,ry:.35,cast:false});
+      B.add(PEAK5,T.rock,x,1.5,z,{sx:width,sy:h,sz:width*.68,ry:Math.PI/4,cast:false});
+      B.add(PEAK5,O.stoneTop,x,1.5+h*.34,z,{sx:width*.32,sy:h*.32,sz:width*.68*.32,ry:Math.PI/4,cast:false});
+    }
+    // Broad snow shoulders behind the playable curb, not scatter across the foreground.
+    for(let x=-W/2;x<=W/2;x+=6)B.add(DODECA,T.speck[1],x,.15,-D/2-1.5,{sx:2.3,sy:.38,sz:.7,ry:.4,cast:false});
+    for(const side of [-1,1]) {
+      const x=side*W*.36,z=-D/2-2.1;
+      B.box(.14,3.8,.14,T.post,x,1.9,z,flat);
+      B.box(1.35,1.7,.06,O.leaf2,x,2.65,z,flat);
+      B.box(.16,1.25,.08,O.stoneTop,x,2.65,z+.01,flat);
     }
   }
 }
@@ -298,13 +525,20 @@ export class Arena {
     const M = 2.2;
     B.box(W + M * 2, 0.5, D + M * 2, T.plinthTop, 0, -0.27, 0, { cast: false });
     B.box(W + M * 2 + 0.6, 3.5, D + M * 2 + 0.6, T.plinth, 0, -2.3, 0, { cast: false });
-    const chunks = Math.round(18 + (W + D) * 0.25);
-    for (let i = 0; i < chunks; i++) {
-      const w = 2 + r() * 5, h = 3 + r() * 8, d = 2 + r() * 5;
-      const side = r() < 0.5;
-      const x = side ? (r() - 0.5) * (W + 10) : (W / 2 + M + 1 + r() * 4) * (r() < 0.7 ? 1 : -1);
-      const z = side ? (D / 2 + M + 1 + r() * 4) * (r() < 0.7 ? 1 : -1) : (r() - 0.5) * (D + 10);
-      B.box(w, h, d, i % 3 ? T.rock : T.plinth, x, -2.5 - h / 2 + r(), z, { cast: false });
+    if (T === THEMES.egolab) {
+      // Engineered foundation bays, all below the pitch and outside gameplay bounds.
+      for (let x = -W / 2; x <= W / 2; x += 6) B.box(1, 3.5, D + M * 2 + .8, T.rock, x, -2.3, 0, { cast: false });
+      for (let z = -D / 2; z <= D / 2; z += 6) B.box(W + M * 2 + .8, 3.5, 1, T.rock, 0, -2.3, z, { cast: false });
+    }
+    if(T !== THEMES.egolab) {
+      // Interlocking cliff columns share the arena footprint instead of scattered floating cubes.
+      const cliff = (x,z,i) => {
+        const height=5+(i%3)*1.5;
+        B.add(CYL6,i%3===0?T.plinth:T.rock,x,-.48-height/2-(i%3)*.10,z,{sx:2.7,sy:height,sz:2.5,ry:Math.PI/6+(i%3)*.025,cast:false});
+      };
+      let i=0;
+      for(let x=-W/2;x<=W/2;x+=4.6){cliff(x,D/2+M-.5,i++);cliff(x,-D/2-M+.5,i++);}
+      for(let z=-D/2+3;z<D/2;z+=4.6){cliff(W/2+M-.5,z,i++);cliff(-W/2-M+.5,z,i++);}
     }
 
     // Curbs
@@ -361,6 +595,12 @@ export class Arena {
     if (lights) {
       const flameMats = T.flame.map((c) => new THREE.MeshBasicMaterial({ color: c }));
       const torch = (x, z) => {
+        if (T === THEMES.egolab) {
+          B.box(.22, 1.0, .22, T.post, x, .5, z);
+          B.box(.55, .18, .32, T.obs.stone, x, 1.05, z);
+          B.box(.40, .07, .34, T.obs.light, x, 1.06, z, { glow: true });
+          return;
+        }
         B.box(0.14, 0.9, 0.14, T.post, x, 0.45, z);
         B.box(0.38, 0.14, 0.38, T.post, x, 0.95, z);
         const fl = new THREE.Group();
@@ -378,6 +618,12 @@ export class Arena {
       for (let i = 1; i < nz; i++) { const z = -D / 2 + (D * i) / nz; torch(-ex, z); torch(ex, z); }
 
       const string = (a, b, sag, n) => {
+        if (T === THEMES.egolab) {
+          const p = a.clone().lerp(b, .5), alongX = Math.abs(a.x - b.x) > .01;
+          B.box(alongX ? Math.abs(b.x - a.x) : .20, .20, alongX ? .20 : Math.abs(b.z - a.z), T.post, p.x, p.y, p.z);
+          B.box(alongX ? 1.8 : .36, .18, alongX ? .36 : 1.8, T.obs.light, p.x, p.y - .12, p.z, { glow: true });
+          return;
+        }
         for (let i = 1; i < n; i++) {
           const t = i / n;
           const p = a.clone().lerp(b, t);
@@ -399,6 +645,7 @@ export class Arena {
       for (let i = 0; i < poles2.length - 1; i++) string(poles2[i], poles2[i + 1], 0.9, 16);
     }
 
+    dressPerimeter(B, T, W, D);
     B.build(G);
 
     // Shrink fence (hidden unless the mode uses it)

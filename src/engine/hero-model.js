@@ -1,9 +1,11 @@
+import { heroPose } from './hero-motion.js';
 // Stylised footballer hero: smooth low-poly parts (spheres / capsules / lathes)
 // baked into ONE vertex-coloured mesh per joint pivot, cel-shaded with a shared
 // 3-step toon ramp. Cosmetics (hair, eyewear, headwear, boots, accessory, kit)
 // come from game/cosmetics.js and are merged into the same pivot meshes.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildHeroMaster, supportsHeroMaster } from './hero-master.js';
 import { HERO_BY_ID } from '../game/heroes.js';
 import { resolveLoadout, loadoutKey, kitColors, BOOT_COLORS } from '../game/cosmetics.js';
 
@@ -493,6 +495,8 @@ function attach(pivot, name, baked) {
 export function buildHero(heroId, C, loadout = null) {
   const h = HERO_BY_ID[heroId];
   const L = h.look;
+  const resolved = resolveLoadout(heroId, loadout);
+  if (C?.('art.heroStyle') !== 'legacy' && supportsHeroMaster(heroId, resolved)) return buildHeroMaster(heroId, C, resolved);
   const jersey = C ? C(`hero.${heroId}.jersey`) : L.jersey;
   const hairCol = C ? C(`hero.${heroId}.hair`) : L.hair;
   const lo = resolveLoadout(heroId, loadout);
@@ -553,15 +557,19 @@ export function buildHero(heroId, C, loadout = null) {
 
 // Apply a pose (from anim.js) to a built hero.
 export function applyPose(model, p) {
+  if(model.userData.artStyle==='master')p=heroPose(model.name,p);
   const r = model.userData.rig;
-  r.hips.position.y = HIPS_Y + p.y;
+  r.hips.position.y = (r.hipsY ?? HIPS_Y) + p.y;
   r.rig.scale.set(r.build * (2 - p.squash) ** 0.5, r.build * p.squash, r.build * (2 - p.squash) ** 0.5);
   r.body.rotation.set(p.lean, p.twist, 0);
   r.head.rotation.x = p.head;
+  if(r.secondary)r.secondary.rotation.x=p.secondary??0;
   r.legs.L.hip.rotation.x = -p.hipL;
   r.legs.R.hip.rotation.x = -p.hipR;
   r.legs.L.knee.rotation.x = p.kneeL;
   r.legs.R.knee.rotation.x = p.kneeR;
+  if(r.legs.L.ankle)r.legs.L.ankle.rotation.x=p.ankleL??0;
+  if(r.legs.R.ankle)r.legs.R.ankle.rotation.x=p.ankleR??0;
   r.arms.L.sh.rotation.set(-p.shL, 0, p.shLz);
   r.arms.R.sh.rotation.set(-p.shR, 0, -p.shRz);
   r.arms.L.el.rotation.x = -p.elL;
@@ -570,9 +578,12 @@ export function applyPose(model, p) {
 
 // World position of the boot tip (used for arcs & ball placement).
 export function footWorld(model, side = 'R', out = new THREE.Vector3()) {
-  const knee = model.userData.rig.legs[side].knee;
+  const leg = model.userData.rig.legs[side];
+  if(leg.boot){leg.boot.updateWorldMatrix(true,false);return out.setFromMatrixPosition(leg.boot.matrixWorld);}
+  const knee = leg.knee;
   knee.updateWorldMatrix(true, false);
-  return out.copy(FOOT_TIP).applyMatrix4(knee.matrixWorld);
+  const tip = model.userData.rig.footTip;
+  return (tip ? out.fromArray(tip) : out.copy(FOOT_TIP)).applyMatrix4(knee.matrixWorld);
 }
 
 // Collect every coloured part in world space (for the elimination shatter).

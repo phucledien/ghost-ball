@@ -160,7 +160,7 @@ export const HEROES = [
       name: 'Emperor Impact', desc: 'Vanish, reappear behind the nearest rival and hammer the ball into them.',
       phases: [
         { name: 'vanish', type: 'hold', pose: 'crouch', dur: 0.12, note: 'Fade out' },
-        { name: 'strike', type: 'fast', pose: 'kick', dur: 0.05, note: 'Impact' },
+        { name: 'strike', type: 'fast', pose: 'kick', contact: true, dur: 0.05, note: 'Impact' },
         { name: 'crown', type: 'move', pose: 'flex', dur: 0.32, note: 'Pose for the crowd' },
       ],
       params: { range: [7, 2, 16, 0.25, 'Range'] },
@@ -203,12 +203,12 @@ addSchema(entries);
 export const ACTIONS = {
   pass: { name: 'Pass', phases: [
     { name: 'windup', type: 'hold', pose: 'coil', note: 'Plant & load' },
-    { name: 'strike', type: 'fast', pose: 'kick', note: 'Strike' },
+    { name: 'strike', type: 'fast', pose: 'kick', contact: true, note: 'Strike' },
     { name: 'follow', type: 'move', pose: 'follow', note: 'Follow through' },
     { name: 'recover', type: 'move', pose: 'idle', note: 'Back to the game' },
   ] },
   catch: { name: 'Catch', phases: [
-    { name: 'absorb', type: 'fast', pose: 'absorb', note: 'Cushion it' },
+    { name: 'absorb', type: 'fast', pose: 'absorb', contact: true, note: 'Cushion it' },
     { name: 'settle', type: 'move', pose: 'idle', note: 'Settle' },
   ] },
   dash: { name: 'Dash', phases: [

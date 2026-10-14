@@ -65,11 +65,11 @@ body.ed { overflow: hidden; }
 .ed-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; background: var(--panel); border: 2px solid var(--accent); padding: 10px 16px; font-size: 14px; box-shadow: var(--shadow-px); }
 .ed-toast.err { border-color: var(--red); }
 
-.ed-side-toggle { display: none; }
+.ed-side-toggle, .ed-side-close { display: none; }
 @media (max-width: 980px) {
   .ed-main { grid-template-columns: 1fr; }
   .ed-side { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(360px, 92vw); transform: translateX(-100%); transition: transform 0.15s steps(4); }
   .ed-side.open { transform: none; box-shadow: 8px 0 0 rgba(0, 0, 0, 0.4); }
-  .ed-side-toggle { display: inline-block; }
+  .ed-side-toggle, .ed-side-close { display: inline-block; }
   .ed-tl canvas { height: 120px; }
 }
