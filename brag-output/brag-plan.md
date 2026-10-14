@@ -1,28 +1,25 @@
-# Ghost Ball — brag video plan
+# Ghost Ball — brag video plan (v2: gameplay pace + striker skills)
 
 **What it is:** a pixel-isometric football survival game: hot-potato football where whoever holds the ball at the buzzer is out.
-**For:** people who like quick, chaotic party/arena games (iPhone & iPad target, web prototype today).
-**Sets it apart:** football as elimination; 6 heroes with MOBA-style skills; every frame is real three.js voxel/pixel art; even the music is synthesised in code.
-**Hook:** our own striker (TITAN) holding the ball as the clock hits 0.0, then BUZZER and ELIMINATED.
-**Tone:** default (punchy, playful, clean), cut on the beat of the game's own 140 BPM match loop.
+**For:** people who like quick, chaotic arena games (iPhone & iPad target, web prototype today).
+**Angle (v2):** play it at game speed. Every shot runs at 1×, takes are long, and the middle of the video gives each striker its own section showing its attack and defense skill in a real match.
 **Share caption:** "Pass it on. Don't be holding it at the buzzer."
 
 ## Visual identity (from src/ui/style.css)
-- Panel `#0e1524`, ink `#f3e9d2`, accent `#e8a93a`, red `#dc4343`, tan `#8c7b58`
-- Silkscreen (display) + Pixelify Sans (body), hard 0 6px 0 pixel shadows, `.gb-tag` kickers
-- All footage is the real game, captured frame by frame (fake clock) with `?demo=1` bots
+- Panel `#0e1524`, ink `#f3e9d2`, accent `#e8a93a`, red `#dc4343`; hero FX colours from the config
+- Silkscreen (display) + Pixelify Sans (body), hard pixel shadows, `.gb-tag` kickers
+- All footage is the real game, captured frame by frame (fake clock) with `?demo=1` bots.
+  Striker clips use the game's own camera at `stage.zoomMul = 0.55` and make the bot cast its skills as soon as they're ready.
 
 ## Audio
-The game's own procedural `audio.js`: the `match` loop (E minor, 140 BPM) plus the real SFX, placed at the real
-match events logged during capture. Rendered offline with a shared reverb and a bus compressor; music up front, SFX underneath.
-Hook: a filtered loop plus G6 ticks; at the buzzer the music cuts and the buzzer, boom and elim land in the gap.
+The game's own procedural `audio.js`: the `match` loop (E minor, 140 BPM) plus the real SFX at the logged match events.
+Hook: filtered loop plus countdown ticks, cut dead by the buzzer. Lead sits lower under the striker section so the skill SFX come through.
 
-## Storyboard (bar = 1.714 s @ 140 BPM; 12 bars + 0.8 s tail ≈ 21.4 s)
-| # | Time | Shot | Text |
-|---|---|---|---|
-| 1 Hook | 0–3.43 | Temple, round 2, push-in on TITAN; buzzer on bar 1 → flash, shake, ELIMINATED | "PASS IT ON." / "DON'T BE HOLDING IT AT THE BUZZER." |
-| 2 Reveal | 3.43–6.86 | Real title screen over a live bot match, slow push | (the game's own logo + tagline) |
-| 3 Rules | 6.86–10.29 | Ego Lab, round 1 → "ODE OUT" | kicker HOW IT PLAYS · "8 STRIKERS. 1 BALL." · "It sticks to whoever touches it." |
-| 4 Heroes | 10.29–13.71 | Striker select turntable: TITAN → BOLT → KAIZ → ECHO, cut every 2 beats | kicker 6 STRIKERS · "12 SKILLS." |
-| 5 Arenas | 13.71–17.14 | Sun Temple Ruins → Ego Lab Complex → Frost Peak (buzzer, VEX OUT) | kicker 3 ARENAS · 5 MODES + arena name |
-| 6 Outro | 17.14–21.4 | Dip to panel; logo over dimmed match | GHOST·BALL · "Pass it on." · Built for iPhone & iPad · web prototype |
+## Storyboard (bar = 1.714 s @ 140 BPM; 35 bars + 0.8 s tail ≈ 60.8 s)
+| # | Bars | Time | Shot | Text |
+|---|---|---|---|---|
+| 1 Hook | 0–3 | 0–5.1 | Temple, TITAN holding the ball as the clock runs out; buzzer on bar 2, ELIMINATED | "PASS IT ON." / "DON'T BE HOLDING IT AT THE BUZZER." |
+| 2 Title | 3–5 | 5.1–8.6 | Real title screen over a live bot match | (the game's own logo + tagline) |
+| 3 Gameplay | 5–9 | 8.6–15.4 | One long Ego Lab take through a full round to the buzzer | "1 BALL. 1 CLOCK." → "LAST STRIKER STANDING." |
+| 4 Strikers | 9–33 | 15.4–56.6 | 6 × 4 bars: NOVA, BOLT, TITAN, JINX, ECHO, KAIZ. Attack shot (2 bars), then defense shot (2 bars); camera follows the hero | Striker n/6 · role, name + title, skill slot, skill name, one-line description (README hero table) |
+| 5 Outro | 33–35 + tail | 56.6–60.8 | Dip; logo over a dimmed match | GHOST·BALL · tagline · 6 STRIKERS · 3 ARENAS · 5 MODES · Built for iPhone & iPad |
