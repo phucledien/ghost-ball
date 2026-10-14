@@ -91,7 +91,9 @@ class Config {
       const r = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values, changes, note, at: new Date().toISOString() }),
+        // Only values that differ from the code defaults are written, so later
+        // default changes in code still reach anything you never touched.
+        body: JSON.stringify({ values: this.sparse(values), changes, note, at: new Date().toISOString() }),
       });
       result = await r.json();
     } catch (e) {
@@ -105,6 +107,12 @@ class Config {
       this.emit(null);
     }
     return result;
+  }
+
+  sparse(values) {
+    const out = {};
+    for (const [k, v] of Object.entries(values)) if (v !== this.defaults[k]) out[k] = v;
+    return out;
   }
 
   persist(key) {

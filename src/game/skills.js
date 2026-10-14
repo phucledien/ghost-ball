@@ -64,19 +64,20 @@ export const SKILLS = {
     const k = P(m, p, 'def'), col = FX(m, p), s = k('fxScale');
     m.startAction(p, 'nova.def', {
       pulse: () => {
-        const dur = k('dur');
-        m.fieldRead = { owner: p, until: m.time + dur };
-        for (const o of m.alive) if (o !== p) { o.t.slow = dur; o.timeScale = k('slow'); }
-        m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.5, r1: 14 * s, time: 0.6 });
-        m.vfx.ring({ x: p.x, z: p.z }, { color: '#ffffff', r0: 0.3, r1: 6 * s, time: 0.4 });
-        m.vfx.pillar(p, col, 6, 0.4, 0.4);
-        m.stage.flash(col, 0.5, 0.25);
-        if (p.human || m.human == null || !m.human.alive) {
-          m.stage.extraFilter = 'hue-rotate(-18deg) saturate(0.7)';
-          setTimeout(() => { if (m.stage) m.stage.extraFilter = ''; }, dur * 1000);
+        // Self-only: a burst of pace plus the pass lanes of every holder,
+        // so NOVA "reads" where the ball is going next.
+        p.t.haste = k('dur');
+        for (const b of m.balls) {
+          if (b.state !== 'held' || !b.owner || b.owner === p) continue;
+          const h = b.owner;
+          const t = m.aimAssist(h, { x: h.fx, z: h.fz });
+          if (t) m.vfx.beam(V(h.x, 0.12, h.z), V(t.x, 0.12, t.z), col, 0.08, 0.9);
         }
+        m.vfx.ring({ x: p.x, z: p.z }, { color: col, r0: 0.5, r1: 7 * s, time: 0.45 });
+        m.vfx.ring({ x: p.x, z: p.z }, { color: '#ffffff', r0: 0.3, r1: 3 * s, time: 0.3 });
+        m.vfx.pillar(p, col, 5, 0.35, 0.35);
       },
-    }, { moveMul: 0.8 });
+    }, { moveMul: 1 });
   },
 
   // ── BOLT ───────────────────────────────────────────────────────────────
@@ -198,6 +199,7 @@ export const SKILLS = {
         const dist = k('dist');
         p.x += d.x * dist; p.z += d.z * dist;
         m.clampToField(p);
+        m.solid(p);
         p.t.invuln = 0.15;
         p.fx = d.x; p.fz = d.z;
         m.vfx.burst(V(p.x, 0.9, p.z), { count: 16, color: [col, '#ffffff'], glow: true, speed: 4, up: 2, life: 0.35 });
@@ -258,6 +260,7 @@ export const SKILLS = {
         p.x = target.x + (dx / d) * 1.0;
         p.z = target.z + (dz / d) * 1.0;
         m.clampToField(p);
+        m.solid(p);
         p.fx = -dx / d; p.fz = -dz / d;
         ball.lastPasser = p;
         ball.prevHolder = p;

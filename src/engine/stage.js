@@ -5,6 +5,10 @@ import * as THREE from 'three';
 import { THEMES } from './themes.js';
 
 const DEG = Math.PI / 180;
+const _ndc = new THREE.Vector2();
+const _ray = new THREE.Raycaster();
+const _ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const _hit = new THREE.Vector3();
 
 export class Stage {
   constructor(container, C, opts = {}) {
@@ -34,7 +38,7 @@ export class Stage {
     this.hemi = new THREE.HemisphereLight('#ffffff', '#444444', 1);
     this.sun = new THREE.DirectionalLight('#ffffff', 1.5);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(1024, 1024);
     this.sun.shadow.bias = -0.0008;
     this.scene.add(this.hemi, this.sun, this.sun.target);
 
@@ -58,10 +62,7 @@ export class Stage {
     this.sun.color.set(T.sun);
     const [x, y, z] = T.sunDir;
     this.sunDir = new THREE.Vector3(x, y, z).normalize();
-    const s = Math.max(W, D) * 0.75 + 6;
-    const sc = this.sun.shadow.camera;
-    sc.left = -s; sc.right = s; sc.top = s; sc.bottom = -s; sc.near = 0.5; sc.far = 120;
-    sc.updateProjectionMatrix();
+    this.shadowExtent = 0; // re-fit around the camera view in update()
   }
 
   get pixelScale() {
@@ -99,6 +100,8 @@ export class Stage {
       case 'front': return { pitch: 4, yaw: 0 };
       case 'top': return { pitch: 89.5, yaw: 0 };
       case 'orbit': return { pitch: C('camera.pitch'), yaw: C('camera.yaw') + this.orbitT * 25 };
+      // menus: a slow cinematic drift around the game angle
+      case 'sway': return { pitch: C('camera.pitch') + 6 + Math.sin(this.orbitT * 0.21) * 4, yaw: C('camera.yaw') + Math.sin(this.orbitT * 0.13) * 22 };
       default: return { pitch: C('camera.pitch'), yaw: C('camera.yaw') };
     }
   }
@@ -133,7 +136,7 @@ export class Stage {
       cam.position.addScaledVector(right, Math.sin(k * 71) * shakeAmt).addScaledVector(up, Math.cos(k * 53) * shakeAmt);
     }
     // Snap to the texel grid so pixels don't shimmer as the camera glides
-    if (this.snap && this.view !== 'orbit') {
+    if (this.snap && this.view !== 'orbit' && this.view !== 'sway') {
       const texel = (2 * zoom) / this.lowH;
       const pr = cam.position.dot(right), pu = cam.position.dot(up);
       cam.position.addScaledVector(right, Math.round(pr / texel) * texel - pr).addScaledVector(up, Math.round(pu / texel) * texel - pu);
@@ -144,6 +147,15 @@ export class Stage {
     const sd = this.sunDir || new THREE.Vector3(-0.5, 1, 0.4).normalize();
     this.sun.position.copy(t).addScaledVector(sd, 40);
     this.sun.target.position.copy(t);
+    // Shadow frustum only covers what the camera can see (not the whole map),
+    // so a 1024 map stays crisp on big arenas and is cheap on phones.
+    const ext = Math.ceil(zoom * Math.max(1.2, this.aspect) * 1.25 + 4);
+    if (ext !== this.shadowExtent) {
+      this.shadowExtent = ext;
+      const sc = this.sun.shadow.camera;
+      sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 0.5; sc.far = 120;
+      sc.updateProjectionMatrix();
+    }
     this.sun.intensity = C('render.sun');
     this.hemi.intensity = C('render.ambient');
     this.renderer.shadowMap.enabled = C('render.shadows');
@@ -173,12 +185,10 @@ export class Stage {
 
   // Container CSS pixels → ground plane point (y = 0)
   toGround(x, y) {
-    const ndc = new THREE.Vector2((x / this.container.clientWidth) * 2 - 1, -(y / this.container.clientHeight) * 2 + 1);
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, this.camera);
-    const hit = new THREE.Vector3();
-    ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit);
-    return hit;
+    _ndc.set((x / this.container.clientWidth) * 2 - 1, -(y / this.container.clientHeight) * 2 + 1);
+    _ray.setFromCamera(_ndc, this.camera);
+    _ray.ray.intersectPlane(_ground, _hit);
+    return _hit;
   }
 
   dispose() {

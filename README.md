@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/readme/hero.png" alt="Ghost Ball gameplay: eight voxel strikers on a sand pitch in a cliff-top temple arena" width="100%">
+<img src="media/readme/hero.png" alt="Ghost Ball gameplay: ten strikers among broken pillars in the Sun Temple Ruins" width="100%">
 
 # GHOST · BALL
 
@@ -14,7 +14,7 @@ Web prototype (Vite + three.js) for an iOS / iPadOS game.
 ![platform](https://img.shields.io/badge/target-iOS%20%C2%B7%20iPadOS-3b7be0?style=flat-square&labelColor=18223a)
 ![status](https://img.shields.io/badge/status-prototype-dc4343?style=flat-square&labelColor=18223a)
 
-[Showcase videos](#showcase) · [How it plays](#how-it-plays) · [Heroes](#heroes) · [Editor](#the-editor) · [Design system](#design-system) · [Run it](#run-it) · [Design doc](docs/GAME_DESIGN.md)
+[Showcase videos](#showcase) · [Menus](#menus--match-setup) · [How it plays](#how-it-plays) · [Heroes](#heroes) · [Editor](#the-editor) · [Design system](#design-system) · [Run it](#run-it) · [Design doc](docs/GAME_DESIGN.md)
 
 </div>
 
@@ -26,6 +26,25 @@ Web prototype (Vite + three.js) for an iOS / iPadOS game.
 |:-:|:-:|:-:|
 | [<img src="media/readme/game.gif" alt="Gameplay clip" width="100%">](media/ghost-ball-game.mp4) | [<img src="media/readme/editor.gif" alt="Editor clip" width="100%">](media/ghost-ball-editor.mp4) | [<img src="media/readme/sheet.gif" alt="Design sheet clip" width="100%">](media/ghost-ball-sheet.mp4) |
 | [▶ Watch (58s)](media/ghost-ball-game.mp4) | [▶ Watch (62s)](media/ghost-ball-editor.mp4) | [▶ Watch (62s)](media/ghost-ball-sheet.mp4) |
+
+---
+
+## Menus & match setup
+
+<img src="media/readme/title.png" alt="Title screen: GHOST·BALL logo over a live bot match, Play / Quick Match / How to Play / Settings" width="100%">
+
+A live bot match plays behind every menu. **Play** walks through three steps, like a kart-racer select:
+
+| 1 · Mode | 2 · Striker | 3 · Arena |
+|:-:|:-:|:-:|
+| <img src="media/readme/select-mode.png" alt="Mode select with rules and stats" width="100%"> | <img src="media/readme/select-striker.png" alt="Striker select with turntable, stat bars and skills" width="100%"> | <img src="media/readme/select-arena.png" alt="Arena select with map schematic and terrain legend" width="100%"> |
+| Rules, ball count, clock, roster size | Turntable preview playing the hero's skill, stat bars, difficulty, all three skills | Top-down map, size, cover and terrain legend; the background switches arena |
+
+<img src="media/readme/select-locker.png" alt="Customise look: hair, eyewear, headwear, boots, accessory and kit" width="100%">
+
+**Customise look** gives each striker hair, eyewear, headwear, boots, an accessory and a kit colourway, saved per hero. Also: Quick Match (your last picks), How to Play, Settings (controls, sound, graphics, difficulty, round length), pause, and a results screen with your placing and match stats. Keyboard (arrows / Enter / Esc) works on every screen.
+
+**Sound** is fully procedural (WebAudio, no asset files): a menu groove and a faster match loop, plus effects for kicks, catches, skills, bounces, the buzzer and eliminations.
 
 ---
 
@@ -59,7 +78,7 @@ To stop endless ping-pong, a new receiver has a short catch lock before they can
 
 <img src="media/readme/arenas.png" alt="The three arenas: Sun Temple, Ego Lab, Frost Peak" width="100%">
 
-**Sun Temple** · **Ego Lab** · **Frost Peak**, three palettes over the same procedural voxel stadium.
+**Sun Temple Ruins** (40×26: pillars, low walls, sand pits, tall grass) · **Ego Lab Complex** (44×28: steel crates, hurdles, boost lanes) · **Frost Peak** (42×28: pine groves, ice rink, snowdrifts) · plus the open **Training Pitch**. Cover blocks runners and passes; low walls stop flat passes but not lobs. Details in [the design doc](docs/GAME_DESIGN.md#14-maps-terrain-and-the-front-end-v02).
 
 ### Built for phones
 
@@ -68,7 +87,7 @@ To stop endless ping-pong, a new receiver has a short catch lock before they can
 <td width="32%"><img src="media/readme/phone.png" alt="Portrait phone layout with joystick and action buttons"></td>
 <td>
 
-- Left thumb **joystick**, right thumb **A / B / C** with cooldown sweeps
+- Controls follow the device: **joystick + A / B / C** on touch screens, key hints and an ability bar on desktop (override in Settings)
 - The HUD reflows for portrait via container queries, the same in the editor's phone frame
 - Safe-area insets, touch-first input, pixel scale tuned for mobile GPUs
 - Plan for iOS: wrap the web build with Capacitor first (see the [design doc](docs/GAME_DESIGN.md))
@@ -85,12 +104,12 @@ Original characters inspired by ego-striker anime archetypes. Each one has a **p
 
 | Hero | Role | Passive | Attack · with ball | Defense · without ball |
 |---|---|---|---|---|
-| **NOVA** · The Architect | Playmaker | Metavision: wider aim assist | **Direct Volley**: near-instant pass that leads the target | **Field Read**: everyone else moves in slow motion |
+| **NOVA** · The Architect | Playmaker | Metavision: wider aim assist | **Direct Volley**: near-instant pass that leads the target | **Field Read**: burst of pace, every pass lane lights up |
 | **BOLT** · The Panther | Speedster | Afterburn: always faster | **Blitz Carry**: dash with the ball, whoever you touch is IT | **Panther Leap**: passes sail underneath you |
 | **TITAN** · The King | Bruiser | Royal Body: can't be stunned | **Predator Cannon**: charged pass that stuns and knocks back | **Rampart**: stomp up a stone wall |
 | **JINX** · The Monster | Trickster | Inner Monster: shorter catch lock | **Phantom Pair**: real ball plus decoys | **Feint Step**: short blink |
 | **ECHO** · The Trapper | Genius | Lazy Genius: cooldowns refill faster while still | **Curve Ghost**: bending, homing pass | **Perfect Trap**: parry window, the ball fires straight back out |
-| **KAIZ** · The Emperor | Assassin | Magnus Field: rivals slowed near him | **Emperor Impact**: teleport behind a rival, hammer it in | **Crown Guard**: shield bubble |
+| **KAIZ** · The Emperor | Assassin | Imperial Pace: faster with the ball | **Emperor Impact**: teleport behind a rival, hammer it in | **Crown Guard**: shield bubble |
 
 <img src="media/readme/sheet-heroes.png" alt="Hero sheet: sprite, portrait, stats, skills with phase timings, run cycle and skill frames" width="100%">
 
@@ -171,8 +190,8 @@ Both come from Google Fonts. Bundle them locally for the iOS build.
 
 ### The look
 
-- **Pixel-isometric:** a real 3D voxel scene rendered at ⅓ resolution and upscaled with `image-rendering: pixelated`, with the camera snapped to the texel grid so pixels don't shimmer
-- **Game feel:** hitstop on catches, trauma² screen shake, flashes, slow-mo on eliminations, smears and afterimages, voxel shatter
+- **Pixel-isometric:** a real 3D scene (cel-shaded low-poly strikers, voxel arenas) rendered at ⅓ resolution and upscaled with `image-rendering: pixelated`, with the camera snapped to the texel grid so pixels don't shimmer
+- **Game feel:** hitstop on catches, trauma² screen shake, flashes, slow-mo on eliminations, smears and afterimages, body-part shatter
 - **Animation:** procedural poses blended through HOLD → FAST → MOVE phases, optionally stepped to 12–30 fps for a hand-animated feel
 
 ---
@@ -190,7 +209,9 @@ bun run dev      # or: npm run dev  →  http://localhost:5173
 | `/editor.html` | Live tuning editor |
 | `/sheet.html` | Design sheet |
 
-URL options for the game: `?autoplay=1` skips the menu, `&hero=titan`, `&mode=fuse|twin|shrink|sudden`, `&demo=1` lets a bot drive your striker.
+The game opens on a title screen: **Play** walks you through Mode → Striker → Arena, with **Quick Match**, **How to Play** and **Settings** alongside.
+
+URL options for the game: `?autoplay=1` skips the menu, `&hero=titan`, `&mode=fuse|twin|shrink|sudden`, `&map=temple|egolab|frost|pitch`, `&demo=1` lets a bot drive your striker.
 
 ### Controls
 
@@ -200,7 +221,7 @@ URL options for the game: `?autoplay=1` skips the menu, `&hero=titan`, `&mode=fu
 | **A**: pass (with ball) / dash (without) | A: hold to charge, drag to aim | J / Space / left click (aims at cursor) |
 | **B**: skill | B | K / Q / right click |
 | **C**: item | C | L / E |
-| Back to menu | | Esc |
+| Pause | ‖ button | Esc |
 
 ---
 
@@ -214,9 +235,9 @@ config/history/       one snapshot per Lock
 docs/GAME_DESIGN.md   full design doc
 media/                showcase videos + README images
 src/core/             schema (every tunable) · config (defaults < locked < draft, live sync)
-src/engine/           stage (iso camera, pixel scale) · arena · themes · hero rig · poses · VFX · props
-src/game/             heroes · skills · sim (rules, ball, rounds) · ai · input · items · modes
-src/ui/               design system CSS · tokens · HUD · pixel icons · portraits
+src/engine/           stage (iso camera, pixel scale) · arena · themes · hero rig · poses · VFX · props · audio
+src/game/             heroes · cosmetics · skills · sim (rules, ball, rounds) · ai · input · items · modes · maps
+src/ui/               design system CSS · tokens · HUD · menus · map schematics · pixel icons · portraits
 src/editor/           Skill Lab + editor chrome
 src/pages/            game · editor · sheet entry scripts
 ```
@@ -226,7 +247,10 @@ src/pages/            game · editor · sheet entry scripts
 - [x] Web prototype: game, editor, design sheet
 - [ ] Playtest pass, balance from locked configs
 - [ ] Capacitor wrap → TestFlight on iPhone / iPad
-- [ ] Haptics, audio, bundled fonts
+- [x] Title, match setup, settings, pause, results
+- [x] Bigger maps with cover and terrain
+- [x] Procedural music and sound effects
+- [ ] Haptics, bundled fonts
 - [ ] Online multiplayer
 
 <div align="center">

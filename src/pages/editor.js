@@ -13,6 +13,7 @@ import { MODES } from '../game/modes.js';
 import { Match } from '../game/sim.js';
 import { Input } from '../game/input.js';
 import { Hud } from '../ui/hud.js';
+import { resolveMap } from '../game/maps.js';
 import { bindTokens } from '../ui/tokens.js';
 import { invalidatePortraits } from '../ui/portrait.js';
 import { SkillLab } from '../editor/lab.js';
@@ -107,19 +108,23 @@ const grid = (() => {
 })();
 
 let worldKey = '';
+let world = null;
 function buildWorld(force = false) {
-  const key = [C('arena.theme'), C('arena.width'), C('arena.depth'), C('arena.crowd'), C('arena.lights')].join('|');
+  const key = [C('arena.map'), C('arena.theme'), C('arena.width'), C('arena.depth'), C('arena.crowd'), C('arena.lights'), state.mode].join('|');
   if (key === worldKey && !force) return applyArenaToggle();
   worldKey = key;
-  arena.build(C('arena.theme'), C('arena.width'), C('arena.depth'), C('arena.crowd'), C('arena.lights'));
-  stage.applyTheme(C('arena.theme'), C('arena.width'), C('arena.depth'));
+  world = resolveMap(C('arena.map'), C);
+  // The Skill Lab keeps a clear floor: obstacles only exist in Live Match
+  const layout = state.mode === 'lab' ? null : world;
+  arena.build(world.theme, world.W, world.D, C('arena.crowd'), C('arena.lights'), layout);
+  stage.applyTheme(world.theme, world.W, world.D);
   applyArenaToggle();
 }
 function applyArenaToggle() {
   arena.group.visible = state.arena;
   grid.visible = !state.arena;
   if (!state.arena) stage.scene.background = new THREE.Color('#aeb2c8');
-  else stage.applyTheme(C('arena.theme'), C('arena.width'), C('arena.depth'));
+  else stage.applyTheme(world.theme, world.W, world.D);
 }
 
 const lab = new SkillLab({ stage, arena, vfx, cfg });
@@ -148,7 +153,7 @@ top.append(row1, row2);
 const modeSeg = seg([['lab', 'Skill Lab'], ['match', 'Live Match']], () => state.mode, (v) => { state.mode = v; enterMode(); });
 const compareSeg = seg([['locked', 'Locked'], ['draft', 'Draft'], ['both', 'Both']], () => state.compare, (v) => { state.compare = v; lab.setCompare(v); afterRebuild(); });
 const camSeg = seg([['game', 'Game'], ['side', 'Side'], ['front', 'Front'], ['top', 'Top'], ['orbit', 'Orbit']], () => state.camView, (v) => { state.camView = v; stage.view = v; });
-const frameSeg = seg([['desk', 'Desk'], ['phone', 'Phone'], ['phone-l', 'Phone ⟷']], () => state.frame, (v) => { state.frame = v; view.className = 'ed-view ' + (v === 'desk' ? '' : v); });
+const frameSeg = seg([['desk', 'Desk'], ['phone', 'Phone'], ['phone-l', 'Phone ⟷']], () => state.frame, (v) => { state.frame = v; view.className = 'ed-view ' + (v === 'desk' ? '' : v); hud?.setControlMode(v === 'desk' ? 'auto' : 'touch'); });
 row1.append(el('div', 'ed-logo', 'GHOST<span>·</span>BALL EDITOR'), sideToggle, modeSeg, compareSeg, camSeg, frameSeg, el('div', 'ed-spacer'));
 const links = el('div', 'ed-row', `<a class="gb-btn" href="${GAME_URL}">Game ↗</a><a class="gb-btn" href="./sheet.html">Design sheet ↗</a>`);
 row1.append(links);
@@ -622,9 +627,10 @@ function startMatch() {
   match?.dispose();
   hud?.dispose();
   buildWorld(true);
-  match = new Match({ stage, vfx, arena, C, humanHero: state.spectate ? null : state.matchHero, modeId: state.matchMode });
+  match = new Match({ stage, vfx, arena, C, humanHero: state.spectate ? null : state.matchHero, modeId: state.matchMode, playersBonus: world.playersBonus });
   match.start();
   hud = new Hud(frame, C);
+  hud.setControlMode(state.frame === 'desk' ? 'auto' : 'touch');
   hud.attach(match, stage);
   if (!input) input = new Input(stage, hud.touch);
   input.touch = hud.touch;

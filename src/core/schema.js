@@ -35,6 +35,8 @@ num('move.radius', 0.45, 0.2, 1, 0.01, 'Body radius');
 num('move.dashSpeed', 22, 8, 50, 0.5, 'Dash speed');
 num('move.dashTime', 0.14, 0.05, 0.5, 0.01, 'Dash time (s)');
 num('move.dashCd', 1.6, 0.2, 6, 0.1, 'Dash cooldown (s)');
+num('move.chargeMul', 0.85, 0.3, 1, 0.01, 'Speed × while charging a pass');
+num('move.actionMul', 0.8, 0, 1, 0.01, 'Speed × during kick / skill animations');
 
 // ── Ball ─────────────────────────────────────────────────────────────────
 num('ball.passSpeed', 16, 6, 40, 0.5, 'Pass speed');
@@ -67,19 +69,20 @@ num('render.ambient', 1.25, 0, 4, 0.05, 'Ambient strength');
 num('render.animFps', 60, 6, 60, 1, 'Animation fps (stepped)');
 
 // ── FX ───────────────────────────────────────────────────────────────────
-num('fx.hitstop', 0.05, 0, 0.3, 0.005, 'Hitstop on catch (s)');
+num('fx.hitstop', 0.03, 0, 0.3, 0.005, 'Hitstop on catch (s)');
 num('fx.shake', 1, 0, 3, 0.05, 'Screen shake ×');
 num('fx.flash', 0.35, 0, 1, 0.01, 'Flash strength');
 num('fx.particles', 1, 0, 3, 0.05, 'Particle amount ×');
 bool('fx.smears', true, 'Smears & afterimages');
-num('fx.slowmo', 0.3, 0.05, 1, 0.01, 'Elimination slow-mo speed');
-num('fx.slowmoTime', 0.7, 0, 3, 0.05, 'Elimination slow-mo length (s)');
+num('fx.slowmo', 0.55, 0.05, 1, 0.01, 'Elimination slow-mo speed');
+num('fx.slowmoTime', 0.3, 0, 3, 0.05, 'Elimination slow-mo length (s)');
 num('fx.trail', 1, 0, 3, 0.05, 'Ball trail ×');
 
 // ── Arena ────────────────────────────────────────────────────────────────
-choice('arena.theme', 'temple', ['temple', 'egolab', 'frost'], 'Arena theme');
-num('arena.width', 26, 12, 50, 1, 'Field width');
-num('arena.depth', 16, 8, 36, 1, 'Field depth');
+choice('arena.map', 'temple', ['temple', 'egolab', 'frost', 'pitch'], 'Map (editor & default)');
+choice('arena.theme', 'temple', ['temple', 'egolab', 'frost'], 'Training Pitch · theme');
+num('arena.width', 30, 12, 60, 1, 'Training Pitch · width');
+num('arena.depth', 19, 8, 40, 1, 'Training Pitch · depth');
 num('arena.crowd', 1, 0, 1, 0.05, 'Crowd density');
 bool('arena.lights', true, 'Torches & lanterns');
 

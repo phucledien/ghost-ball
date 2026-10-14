@@ -108,15 +108,15 @@ Each hero has a passive, an attack skill and a defense skill. Each skill is an a
 | **TITAN** | The King · Bruiser | 0.94 | Royal Body | Predator Cannon · 11 s | Rampart · 12 s |
 | **JINX** | The Monster · Trickster | 1.02 | Inner Monster | Phantom Pair · 9 s | Feint Step · 7 s |
 | **ECHO** | The Trapper · Genius | 0.97 | Lazy Genius | Curve Ghost · 8 s | Perfect Trap · 10 s |
-| **KAIZ** | The Emperor · Assassin | 1.00 | Magnus Field | Emperor Impact · 12 s | Crown Guard · 11 s |
+| **KAIZ** | The Emperor · Assassin | 1.00 | Imperial Pace | Emperor Impact · 12 s | Crown Guard · 11 s |
 
 Keys: `hero.<id>.speed`, `hero.<id>.atk.cd`, `hero.<id>.def.cd`, `hero.<id>.<slot>.<phase>`, `hero.<id>.<slot>.<param>`, plus `amp` (pose amplitude) and `fxScale` on every skill. Each round starts with skill cooldowns capped at 1.5 s.
 
 ### NOVA — The Architect
 - **Passive · Metavision:** +18° aim-assist cone (`passive.aimBonus`) and +3 m assist range.
 - **Attack · Direct Volley:** `read` HOLD 0.20 → `volley` FAST 0.05 → `follow` MOVE 0.18 → `recover` MOVE 0.14. A flat, near-instant pass at ×2.1 speed (`speedMul`) with full lead prediction (`lead` 1.0). The lane is telegraphed with a thin beam during *read*, and the strike adds a beam, a short hitstop and a zoom punch.
-- **Defense · Field Read:** `focus` HOLD 0.12 → `pulse` FAST 0.06 → `recover` MOVE 0.10. Every other player **and the ball** run at ×0.4 time (`slow`) for 1.4 s (`dur`). The screen gets a hue-shift filter.
-- **Counterplay:** Field Read doesn't stop a pass that's already about to hit. Bait the read, then pass after it ends.
+- **Defense · Field Read:** `focus` HOLD 0.12 → `pulse` FAST 0.06 → `recover` MOVE 0.10. NOVA runs at ×1.45 (`speed`) for 1.4 s (`dur`), and every holder's likely pass lane lights up as a beam. Self-only: it never slows anyone else (an earlier version slowed every other player, which felt like lag).
+- **Counterplay:** the lanes show where passes *would* go. Fake one lane, then pass after the burst ends.
 
 ### BOLT — The Panther
 - **Passive · Afterburn:** permanent ×1.10 speed (`passive.speed`).
@@ -143,7 +143,7 @@ Keys: `hero.<id>.speed`, `hero.<id>.atk.cd`, `hero.<id>.def.cd`, `hero.<id>.<slo
 - **Counterplay:** the window is short. Delay your pass, or use it on a target the trap can't redirect into you.
 
 ### KAIZ — The Emperor
-- **Passive · Magnus Field:** while Kaiz holds the ball, rivals within 3.5 m move at ×0.8.
+- **Passive · Imperial Pace:** while Kaiz holds the ball he runs at ×1.12 (`holdSpeed`).
 - **Attack · Emperor Impact:** `vanish` HOLD 0.12 → `strike` FAST 0.05 → `crown` MOVE 0.32. Teleports behind the nearest valid rival within 7 m and **forces a catch** (0.35 s stun, knockback 4). If no one is in range, the skill doesn't fire and goes on no cooldown.
 - **Defense · Crown Guard:** `raise` FAST 0.08 → `guard` HOLD 0.20 → `release` 0.12. A shield bubble for 1.5 s that bounces balls away.
 - **Counterplay:** keep more than 7 m away when Kaiz has the ball. Cloak and leap make you untargetable.
@@ -196,7 +196,7 @@ Size and dressing: `arena.width` 26, `arena.depth` 16, `arena.crowd` 1.0, `arena
 | Hitstop | Sim freezes on a catch, scaled by ball speed (×≤1.6). Skills add their own (0.05–0.09 s) | `fx.hitstop` 0.05 s |
 | Screen shake | Trauma model: offset ∝ trauma², decays 1.8/s. Pass 0.12–0.27, cannon 0.7, elimination 0.75 | `fx.shake` ×1 |
 | Flash | Full-screen screen-blend flash | `fx.flash` 0.35 |
-| Elimination slow-mo | Game speed ×0.3 for 0.7 s. Shock (HOLD) → burst (FAST, voxel shatter + pillar + rings) → scatter | `fx.slowmo`, `fx.slowmoTime`, `anim.elim.*` |
+| Elimination slow-mo | Game speed ×0.55 for 0.3 s (kept short so it reads as a beat, not lag). Shock (HOLD) → burst (FAST, voxel shatter + pillar + rings) → scatter | `fx.slowmo`, `fx.slowmoTime`, `anim.elim.*` |
 | Zoom punch | Brief zoom-in on big hits | — |
 | Stepped animation | Poses update at N fps ("on twos" = 30, "on threes" = 20) | `render.animFps` 60 |
 | Smears & afterimages | Flat-colour ghost clones during dashes, blitz, leap and blink. Beam smears | `fx.smears` on |
@@ -230,7 +230,7 @@ Layering: schema defaults < `locked.json` < draft.
 
 **Performance budget (target 60 fps on A14+):**
 - The pixel scale is the main lever: pixelScale 3 renders about 1/9 of the screen pixels.
-- One 2048² shadow map (BasicShadowMap). Drop it to 1024 or turn off `render.shadows` on low-end devices.
+- One 1024² shadow map (BasicShadowMap) fitted to the camera view, not the whole arena. Static arena geometry is merged into a few vertex-coloured meshes; each hero is 18 meshes. About 220 draw calls in a 10-player match on the big maps.
 - Particles and crowd are instanced (2 draw calls per pool). Hero meshes share cached geometry and materials.
 - Portraits use **one** shared offscreen WebGL context, which keeps the context count low on iOS.
 
@@ -268,3 +268,25 @@ Layering: schema defaults < `locked.json` < draft.
 | **Vertical slice** | Capacitor iOS build, final art pass on 2 heroes + 1 arena, audio, haptics, onboarding | 10-minute sessions on device at 60 fps, positive playtest |
 | **Multiplayer** | Server-authoritative netcode, matchmaking, lobbies | 8-player matches at < 120 ms with rollback-free pass feel |
 | **Soft launch** | Progression, cosmetics, analytics | D1/D7 retention targets |
+
+## 14. Maps, terrain and the front-end (v0.2)
+
+**Maps** (`src/game/maps.js`) pair a theme with a size and a mirrored layout. Obstacles block runners and the ball; the ball sails over anything lower than its height, so knee-high walls stop flat passes but not lobs. Aim assist skips targets hidden in tall grass from more than 4 m and penalises targets behind cover.
+
+| Map | Size | Cover | Terrain |
+|---|---|---|---|
+| Sun Temple Ruins | 40 × 26 | pillars, ruin blocks, low walls | sand pits (slow), tall grass (hide) |
+| Ego Lab Complex | 44 × 28 | steel crates, hurdles | boost lanes (×1.4) |
+| Frost Peak | 42 × 28 | pines, ice blocks, rocks | ice rink (no grip), snowdrifts (slow) |
+| Training Pitch | editor `arena.*` | none | none |
+
+The big maps add 2 strikers. Bots steer around obstacles and won't pass through cover. An arrow on the screen edge points at an off-screen ball.
+
+**Front-end flow:** Title (live bot match behind, slow camera drift) → Mode → Striker (turntable, stat bars, skills, cosmetics locker) → Arena (schematic map, terrain legend) → VS splash → match → results (placing, passes, times IT, skills, survival time). Pause with Esc or the ‖ button. Arrow keys / Enter / Esc work on every screen.
+
+**Controls by device:** touch screens get the joystick and A/B/C buttons; keyboard/mouse gets a key-hint bar and a compact ability bar with key caps. Auto mode follows whatever you last used; Settings can force either.
+
+**Settings** live in `localStorage` (`ghostball.settings.v1`), separate from the tuning draft, and override config values only while set: pixel size, shadows, effects, shake, HUD size, bot difficulty, round length.
+
+**Characters:** cel-shaded low-poly footballers (`hero-model.js`) with per-hero faces and builds, and cosmetics (`cosmetics.js`): hair, eyewear, headwear, boots, accessory and kit colourways. Your loadout is saved per hero.
+

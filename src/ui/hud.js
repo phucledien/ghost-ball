@@ -23,16 +23,22 @@ export class Hud {
     this.vignette = h('div', 'hud-vignette');
     this.top = h('div', 'hud-top');
     this.timer = h('div', 'hud-timer', '<div class="big">15</div><div class="sub">ROUND 1</div>');
-    this.top.appendChild(this.timer);
+    this.pauseBtn = h('button', 'hud-pause interactive', '<i></i><i></i>');
+    this.pauseBtn.setAttribute('aria-label', 'Pause');
+    this.pauseBtn.addEventListener('click', () => this.onPause?.());
+    this.onPause = null;
+    this.top.append(this.pauseBtn, this.timer);
     this.card = h('div', 'hud-card left');
     this.alive = h('div', 'hud-alive');
     this.feed = h('div', 'hud-feed');
     this.banner = h('div', 'hud-banner');
     this.tags = h('div');
     this.pops = h('div');
-    this.help = h('div', 'hud-help', '<span><span class="gb-kbd">WASD</span> move</span><span><span class="gb-kbd">J</span>/<span class="gb-kbd">CLICK</span> pass · dash</span><span><span class="gb-kbd">K</span>/<span class="gb-kbd">R-CLICK</span> skill</span><span><span class="gb-kbd">L</span> item</span>');
-    this.root.append(this.vignette, this.tags, this.pops, this.top, this.card, this.alive, this.feed, this.banner, this.help);
+    this.help = h('div', 'hud-help', '<span><span class="gb-kbd">WASD</span> move</span><span><span class="gb-kbd">MOUSE</span> aim</span><span><span class="gb-kbd">J</span>/<span class="gb-kbd">CLICK</span> pass · dash</span><span><span class="gb-kbd">K</span>/<span class="gb-kbd">R-CLICK</span> skill</span><span><span class="gb-kbd">L</span> item</span><span><span class="gb-kbd">ESC</span> pause</span>');
+    this.offball = h('div', 'hud-offball', '<i></i>');
+    this.root.append(this.vignette, this.tags, this.pops, this.offball, this.top, this.card, this.alive, this.feed, this.banner, this.help);
     this.buildControls();
+    this.initControlMode();
     this.tagEls = new Map();
     this.portraits = new Map();
   }
@@ -64,7 +70,8 @@ export class Hud {
 
     const acts = h('div', 'hud-actions interactive');
     const mk = (cls, key, label) => {
-      const b = h('div', `act ${cls}`, `<div class="cd"></div><div class="k">${key}</div><div class="l">${label}</div><div class="cdn"></div>`);
+      const hot = { a: 'J', b: 'K', c: 'L' }[cls];
+      const b = h('div', `act ${cls}`, `<div class="cd"></div><div class="k">${key}</div><div class="l">${label}</div><div class="cdn"></div><div class="hot">${hot}</div>`);
       acts.appendChild(b);
       return b;
     };
@@ -104,10 +111,46 @@ export class Hud {
     this.actsEl = acts;
   }
 
+  // Controls follow the device: touch → joystick + buttons; keyboard/mouse →
+  // a key-hint bar and a compact ability bar. 'auto' starts from the pointer
+  // type and then follows whatever you last used (tap vs. key press / click).
+  initControlMode() {
+    this.hasPlayer = false;
+    this.controlMode = 'auto';
+    const coarse = typeof matchMedia !== 'undefined' && matchMedia('(hover: none) and (pointer: coarse)').matches;
+    this.detected = coarse ? 'touch' : 'keys';
+    this.onAnyPointer = (e) => { if (e.pointerType === 'touch' || e.pointerType === 'pen') this.setDetected('touch'); else if (e.pointerType === 'mouse') this.setDetected('keys'); };
+    this.onAnyKey = (e) => { if (!e.target.closest?.('input, textarea, select')) this.setDetected('keys'); };
+    window.addEventListener('pointerdown', this.onAnyPointer, true);
+    window.addEventListener('keydown', this.onAnyKey, true);
+    this.applyControls();
+  }
+
+  setDetected(kind) {
+    if (this.detected === kind) return;
+    this.detected = kind;
+    this.applyControls();
+  }
+
+  // mode: 'auto' | 'touch' | 'keys'
+  setControlMode(mode = 'auto') {
+    this.controlMode = mode;
+    this.applyControls();
+  }
+
+  get activeControls() { return this.controlMode === 'auto' ? this.detected : this.controlMode; }
+
+  applyControls() {
+    const kind = this.activeControls;
+    this.root.classList.toggle('ctl-touch', kind === 'touch');
+    this.root.classList.toggle('ctl-keys', kind !== 'touch');
+    this.root.classList.toggle('no-player', !this.hasPlayer);
+    if (kind !== 'touch') { this.touch.joy = { x: 0, y: 0 }; this.touch.a = this.touch.skill = this.touch.item = false; }
+  }
+
   setControlsVisible(v) {
-    this.joyEl.style.display = v ? '' : 'none';
-    this.actsEl.style.display = v ? '' : 'none';
-    this.help.style.display = v ? '' : 'none';
+    this.hasPlayer = v;
+    this.applyControls();
   }
 
   attach(match, stage) {
@@ -202,7 +245,10 @@ export class Hud {
       const pips = this.card.querySelector('.gb-pips');
       if (pips) {
         const n = m.alive.length;
-        pips.innerHTML = m.players.map((p) => `<i class="${p.alive ? 'on' : ''}"></i>`).slice(0, 12).join('');
+        if (this._pipsN !== n) {
+          this._pipsN = n;
+          pips.innerHTML = m.players.map((p) => `<i class="${p.alive ? 'on' : ''}"></i>`).slice(0, 14).join('');
+        }
         const bar = this.card.querySelector('.gb-bar > b');
         const cd = me.cd[slot] / C(`hero.${me.heroId}.${slot}.cd`);
         bar.style.width = `${(1 - cd) * 100}%`;
@@ -258,13 +304,36 @@ export class Hud {
       if (!p.alive || !p.model.visible) { el.style.display = 'none'; continue; }
       const it = !!m.holding(p);
       el.style.display = '';
-      el.className = 'hud-tag' + (p.human ? ' me' : '') + (it ? ' it' : '');
-      el.textContent = it ? (p.human ? '▼ YOU · IT' : `▼ ${p.name}`) : p.human ? 'YOU' : p.name;
+      const sig = (it ? 1 : 0) + (p.human ? 2 : 0);
+      if (el._sig !== sig) {
+        el._sig = sig;
+        el.className = 'hud-tag' + (p.human ? ' me' : '') + (it ? ' it' : '');
+        el.textContent = it ? (p.human ? '▼ YOU · IT' : `▼ ${p.name}`) : p.human ? 'YOU' : p.name;
+      }
       v.set(p.x, 2.55 * HERO_BY_ID[p.heroId].look.build + p.y, p.z);
       this.stage.toScreen(v, pt);
       el.style.left = `${pt.x}px`;
       el.style.top = `${pt.y}px`;
     }
+    // Off-screen ball: an arrow on the screen edge pointing at it
+    const ball = m.balls.find((b) => b.state !== 'dead');
+    let showArrow = false;
+    if (ball && m.phase !== 'over') {
+      v.set(ball.x, ball.y, ball.z);
+      this.stage.toScreen(v, pt);
+      const W = this.root.clientWidth, H = this.root.clientHeight, pad = 34;
+      if (pt.x < 0 || pt.y < 0 || pt.x > W || pt.y > H) {
+        showArrow = true;
+        const cx = W / 2, cy = H / 2, dx = pt.x - cx, dy = pt.y - cy;
+        const k = Math.min((W / 2 - pad) / Math.abs(dx || 1e-3), (H / 2 - pad) / Math.abs(dy || 1e-3));
+        const ang = Math.atan2(dy, dx);
+        this.offball.style.transform = `translate(${cx + dx * k}px, ${cy + dy * k}px) rotate(${ang}rad)`;
+        const held = ball.state === 'held' && ball.owner;
+        this.offball.classList.toggle('hot', !!held);
+      }
+    }
+    this.offball.style.display = showArrow ? '' : 'none';
+
     for (const el of this.pops.children) {
       const p = el._p;
       v.set(p.x, 3.1 + p.y, p.z);
@@ -274,5 +343,10 @@ export class Hud {
     }
   }
 
-  dispose() { this.root.remove(); }
+  dispose() {
+    window.removeEventListener('pointerdown', this.onAnyPointer, true);
+    window.removeEventListener('keydown', this.onAnyKey, true);
+    clearTimeout(this.bannerT);
+    this.root.remove();
+  }
 }

@@ -11,6 +11,8 @@ export const THEMES = {
     crowd: ['#e04a5a', '#3b7be0', '#e8a93a', '#f3e9d2', '#5cc46a', '#8c5a3c', '#2a2f4a'], skin: ['#e2a878', '#b9784e', '#f0caa6', '#8a5a3a'],
     flame: ['#ffd84a', '#ff9a2a', '#ff5a2a'], post: '#2a1f1a', lantern: '#ffe7a0',
     sun: '#fff1d8', sunDir: [-0.55, 1, 0.4], ambSky: '#c9cdf5', ambGround: '#6b5a4a',
+    obs: { stone: '#c9b48a', stoneDark: '#a08a62', stoneTop: '#e6d3a6', moss: '#5f8a4a', crate: '#8a6a44', crateTrim: '#5a4228', leaf: '#3f7a4a', leaf2: '#2f6040', trunk: '#5a3a24' },
+    zone: { mud: ['#c39a5c', '#b08850', '#d0a86a'], grass: ['#6c9a46', '#5a8a3c', '#7eaa52'], snow: ['#f6fafd', '#e4ecf4'], ice: ['#bfe4f6', '#a6d4ee', '#e6f6ff'], boost: ['#0f2a3a', '#5ad8ff', '#e8fbff'] },
   },
   egolab: {
     name: 'Ego Lab', desc: 'Night-time training facility. Turf, floodlights, monitors watching you.',
@@ -22,6 +24,8 @@ export const THEMES = {
     crowd: ['#3b7be0', '#5ad8ff', '#1d2a4c', '#e8f6ff', '#6a46d8'], skin: ['#e2a878', '#b9784e', '#f0caa6'],
     flame: ['#e8fbff', '#5ad8ff', '#2a8cff'], post: '#0c1222', lantern: '#9ae8ff',
     sun: '#cfe4ff', sunDir: [0.3, 1, 0.5], ambSky: '#6a86c8', ambGround: '#14243a',
+    obs: { stone: '#3a4a6e', stoneDark: '#26324e', stoneTop: '#5ad8ff', moss: '#2a8cff', crate: '#2c3a5c', crateTrim: '#5ad8ff', leaf: '#2f8f62', leaf2: '#256b4a', trunk: '#1b2442' },
+    zone: { mud: ['#1f5e40', '#256b4a'], grass: ['#3c9468', '#33885e', '#4aa676'], snow: ['#e8f6ff', '#cfe4ff'], ice: ['#9ae8ff', '#5ad8ff', '#e8fbff'], boost: ['#0c1830', '#5ad8ff', '#e8fbff'] },
   },
   frost: {
     name: 'Frost Peak', desc: 'Packed-snow pitch above the clouds. Pines, banners, cold breath.',
@@ -33,5 +37,7 @@ export const THEMES = {
     crowd: ['#dc4343', '#3b7be0', '#f3e9d2', '#2a2f4a', '#e8a93a'], skin: ['#f0caa6', '#e2a878'],
     flame: ['#fff4c0', '#ffb84a', '#ff7a3a'], post: '#2a3448', lantern: '#fff1c0',
     sun: '#ffffff', sunDir: [-0.4, 1, 0.6], ambSky: '#dfe8ff', ambGround: '#7a8aa8',
+    obs: { stone: '#8a9cba', stoneDark: '#6c7e9e', stoneTop: '#f6fafd', moss: '#f6fafd', crate: '#7a5a3a', crateTrim: '#4a3424', leaf: '#2f6a5a', leaf2: '#245548', trunk: '#4a3424', ice: '#a6dcf2' },
+    zone: { mud: ['#c8d6e6', '#b7c9dd'], grass: ['#5a8a6a', '#4a7a5a'], snow: ['#ffffff', '#f2f7fc', '#dfe9f4'], ice: ['#b6e2f6', '#9cd2ee', '#eaf8ff'], boost: ['#2a3448', '#8fd0ff', '#ffffff'] },
   },
 };

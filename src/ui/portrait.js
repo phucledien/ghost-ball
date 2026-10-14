@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { buildHero, applyPose } from '../engine/hero-model.js';
 import { POSES, actionPose, locomotionPose } from '../engine/anim.js';
-import { phasesFor } from '../game/heroes.js';
+import { phasesFor, HERO_BY_ID } from '../game/heroes.js';
 
 let R = null;
 function rig() {
@@ -22,22 +22,27 @@ function rig() {
 }
 
 const models = new Map();
-function modelFor(heroId, C) {
-  const key = heroId;
-  if (!models.has(key)) models.set(key, buildHero(heroId, C));
+function modelFor(heroId, C, loadout = null) {
+  const key = loadout ? `${heroId}|${JSON.stringify(loadout)}` : heroId;
+  if (!models.has(key)) {
+    if (models.size > 48) models.clear();
+    models.set(key, buildHero(heroId, C, loadout));
+  }
   return models.get(key);
 }
 export function invalidatePortraits() { models.clear(); }
 
 // mode: 'bust' (head & shoulders) | 'full'
-export function renderHero(heroId, C, { w = 48, h = 48, mode = 'bust', yaw = 0.5, pitch = 0.12, pose = null, bg = null } = {}) {
+export function renderHero(heroId, C, { w = 48, h = 48, mode = 'bust', yaw = 0.5, pitch = 0.12, pose = null, bg = null, loadout = null, out = null } = {}) {
   const { renderer, scene, camera } = rig();
-  const m = modelFor(heroId, C);
+  const m = modelFor(heroId, C, loadout);
   scene.add(m);
   applyPose(m, pose || POSES.idle);
   m.rotation.y = yaw;
+  // bust: head & shoulders · full: sprite frames · stage: the select-screen turntable (fits TITAN)
   const bust = mode === 'bust';
-  const cy = bust ? 1.75 : 1.0, half = bust ? 0.52 : 1.15;
+  const b = HERO_BY_ID[heroId]?.look.build ?? 1;
+  const cy = mode === 'stage' ? 1.32 : (bust ? 1.88 : 1.12) * b, half = mode === 'stage' ? 1.44 : (bust ? 0.42 : 1.25) * b;
   camera.top = half; camera.bottom = -half; camera.left = -half * (w / h); camera.right = half * (w / h);
   camera.position.set(Math.sin(0) * 10, cy + Math.sin(pitch) * 10, Math.cos(pitch) * 10);
   camera.lookAt(0, cy, 0);
@@ -46,10 +51,14 @@ export function renderHero(heroId, C, { w = 48, h = 48, mode = 'bust', yaw = 0.5
   renderer.setClearColor(bg || '#000000', bg ? 1 : 0);
   renderer.render(scene, camera);
   scene.remove(m);
-  const out = document.createElement('canvas');
-  out.width = w; out.height = h;
-  out.getContext('2d').drawImage(renderer.domElement, 0, 0);
-  return out;
+  // `out`: draw into an existing canvas (menu preview) instead of a new one
+  const dst = out || document.createElement('canvas');
+  if (!out) { dst.width = w; dst.height = h; }
+  const g = dst.getContext('2d');
+  if (out) g.clearRect(0, 0, dst.width, dst.height);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(renderer.domElement, 0, 0, dst.width, dst.height);
+  return dst;
 }
 
 export function portraitURL(heroId, C, size = 40) {

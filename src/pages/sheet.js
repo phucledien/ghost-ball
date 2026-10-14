@@ -10,6 +10,8 @@ import { HEROES, phasesFor } from '../game/heroes.js';
 import { ITEMS } from '../game/items.js';
 import { MODES } from '../game/modes.js';
 import { THEMES } from '../engine/themes.js';
+import { MAPS, MAP_IDS, ZONES } from '../game/maps.js';
+import { drawSchematic } from '../ui/schematic.js';
 import { ICONS, SKILL_ICON, iconURL, itemIconURL } from '../ui/icons.js';
 import { renderHero, portraitURL, actionFrames, runFrames, invalidatePortraits } from '../ui/portrait.js';
 import { Stage } from '../engine/stage.js';
@@ -206,7 +208,7 @@ function kit(h, slot, label) {
 function renderHeroes(only = null) {
   const host = body('heroes');
   if (!only) {
-    host.innerHTML = `<p class="intro">Voxel heroes built from boxes with joint pivots (<code>engine/hero-model.js</code>), posed procedurally (<code>engine/anim.js</code>). Sprites and frames below are rendered live from the same rig.</p>
+    host.innerHTML = `<p class="intro">Cel-shaded low-poly footballers with joint pivots and swappable cosmetics (<code>engine/hero-model.js</code>, <code>game/cosmetics.js</code>), posed procedurally (<code>engine/anim.js</code>). Sprites and frames below are rendered live from the same rig.</p>
       <div class="sh-grid" data-heroes></div>`;
     host.querySelector('[data-heroes]').innerHTML = HEROES.map((h) => `<div class="gb-card hero-card" data-hero="${h.id}"></div>`).join('');
     spinners.length = 0;
@@ -286,7 +288,7 @@ const FX_VOCAB = [
   ['Pillar', 'Vertical light column. Ball spawn, item drop, elimination.', ['fx.flash']],
   ['Beam', 'Stretched glowing box between two points. Aim lines, Direct Volley, smears.', ['fx.smears']],
   ['Afterimage', 'Flat-coloured clone of the hero that fades. Dashes, leaps, blinks.', ['fx.smears']],
-  ['Voxel shatter', 'Hero splits into its own boxes with gravity + floor bounce.', ['fx.particles', 'anim.elim.burst', 'anim.elim.scatter']],
+  ['Voxel shatter', 'Hero splits into chunks of its own body parts with gravity + floor bounce.', ['fx.particles', 'anim.elim.burst', 'anim.elim.scatter']],
   ['Hitstop', 'Sim freezes for a few frames on impact so hits read.', ['fx.hitstop']],
   ['Shake', 'Camera trauma² shake in screen space.', ['fx.shake']],
   ['Flash', 'Full-screen colour flash (screen blend).', ['fx.flash']],
@@ -373,7 +375,7 @@ function startDemo(el) {
 // ── 09 Arenas & modes ───────────────────────────────────────────────────
 function renderArenas() {
   body('arenas').innerHTML = `
-    <p class="intro">Three visual variants of the arena (<code>arena.theme</code>, currently <b>${C('arena.theme')}</b>) and five rule variants (<code>rules.mode</code>, currently <b>${C('rules.mode')}</b>).</p>
+    <p class="intro">Three visual themes and four maps built on them (<code>arena.map</code>, currently <b>${C('arena.map')}</b>; the Training Pitch uses <code>arena.theme</code>) and five rule variants (<code>rules.mode</code>, currently <b>${C('rules.mode')}</b>).</p>
     <div class="t-label sh-sub">Arena themes</div>
     <div class="sh-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">${Object.entries(THEMES).map(([id, T]) => `
       <div class="gb-card theme-row ${id === C('arena.theme') ? 'selected' : ''}" style="padding:0;overflow:hidden">
@@ -385,8 +387,16 @@ function renderArenas() {
         <div class="t-small">${esc(T.desc)}</div>
         <div class="sh-strip">${themeColors(T).map(([k, c]) => `<i style="background:${c}" title="${k} ${c}"></i>`).join('')}</div></div>
       </div>`).join('')}</div>
+    <div class="t-label sh-sub">Maps (<code>game/maps.js</code>)</div>
+    <div class="sh-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">${MAP_IDS.map((id) => `
+      <div class="gb-card" style="display:flex;flex-direction:column;gap:8px"><canvas data-map-schem="${id}" style="width:100%;image-rendering:pixelated;border:1px solid var(--line)"></canvas>
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span class="t-h2" style="font-size:15px">${esc(MAPS[id].name)}</span><code>${id}</code></div>
+        <div class="t-small">${esc(MAPS[id].desc)}</div></div>`).join('')}</div>
+    <div class="t-label sh-sub">Terrain zones</div>
+    <div class="sh-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">${Object.entries(ZONES).map(([k, z]) => `<div class="gb-card" style="display:flex;gap:10px;align-items:flex-start"><i style="flex:none;width:28px;height:28px;background:${(THEMES.temple.zone[k])[k === 'boost' ? 1 : 0]};border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)"></i><div><div class="t-h2" style="font-size:13px">${esc(z.name)}</div><div class="t-small">${esc(z.desc)}</div><code>speed ×${z.speed} · grip ×${z.accel}</code></div></div>`).join('')}</div>
     <div class="t-label sh-sub">Game modes</div>
     <div class="sh-grid mode-grid">${Object.entries(MODES).map(([id, m]) => `<div class="gb-card mode-pick ${id === C('rules.mode') ? 'selected' : ''}"><div class="tg">${m.tag}</div><div class="nm">${m.name}</div><div class="ds">${esc(m.desc)}</div><code>${id} · balls ${m.balls} · timer ${m.timer}${m.shrink ? ' · shrink' : ''}</code></div>`).join('')}</div>`;
+  for (const cv of body('arenas').querySelectorAll('[data-map-schem]')) drawSchematic(cv, cv.dataset.mapSchem, C, 1, 6);
 }
 
 // ── Render + live updates ───────────────────────────────────────────────

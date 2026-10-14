@@ -1,12 +1,51 @@
 // Bot brains. Holders chase and pass; runners flee holders, dodge incoming
 // passes and grab items. Reaction time and aim error scale with rules.botSkill.
 
+import { segmentBlocked, isCircle } from './maps.js';
+
 const rnd = (a, b) => a + Math.random() * (b - a);
+
+// Steer a desired direction around map obstacles: push away from nearby
+// surfaces and slide along anything straight ahead.
+function avoid(m, p, x, z) {
+  const obs = m.arena.obstacles;
+  if (!obs?.length) return { x, z };
+  const l = Math.hypot(x, z);
+  if (l < 0.05) return { x, z };
+  let dx = x / l, dz = z / l;
+  let ax = 0, az = 0;
+  for (const o of obs) {
+    let nx, nz, gap;
+    if (isCircle(o)) {
+      const ox = p.x - o.x, oz = p.z - o.z, d = Math.hypot(ox, oz) || 0.01;
+      nx = ox / d; nz = oz / d; gap = d - o.r;
+    } else {
+      const cx = Math.max(o.x - o.w / 2, Math.min(o.x + o.w / 2, p.x));
+      const cz = Math.max(o.z - o.d / 2, Math.min(o.z + o.d / 2, p.z));
+      const ox = p.x - cx, oz = p.z - cz, d = Math.hypot(ox, oz) || 0.01;
+      nx = ox / d; nz = oz / d; gap = d;
+    }
+    if (gap > 2.2) continue;
+    const facing = -(dx * nx + dz * nz); // >0 when heading into it
+    if (facing <= 0) continue;
+    const w = (2.2 - gap) / 2.2;
+    // tangent that keeps the most of the desired heading
+    let tx = -nz, tz = nx;
+    if (tx * dx + tz * dz < 0) { tx = -tx; tz = -tz; }
+    ax += (tx * 1.6 + nx * 0.8) * w * facing;
+    az += (tz * 1.6 + nz * 0.8) * w * facing;
+  }
+  dx += ax; dz += az;
+  const n = Math.hypot(dx, dz) || 1;
+  return { x: (dx / n) * Math.min(1, l), z: (dz / n) * Math.min(1, l) };
+}
+
 
 function nearestTarget(m, p, ball) {
   let best = null, bd = Infinity;
   for (const o of m.alive) {
     if (o === p || o.t.cloak > 0) continue;
+    if (o.zoneKind === 'grass' && Math.hypot(o.x - p.x, o.z - p.z) > 4) continue;
     if (ball && ball.prevHolder === o && (ball.immune.get(o.id) ?? 0) > m.time) continue;
     const d = Math.hypot(o.x - p.x, o.z - p.z) + (o.t.shield > 0 || o.t.crown > 0 ? 6 : 0);
     if (d < bd) { bd = d; best = o; }
@@ -15,6 +54,7 @@ function nearestTarget(m, p, ball) {
 }
 
 function blockedByWall(m, a, b) {
+  if (m.arena.obstacles?.length && segmentBlocked(m.arena.obstacles, a, b, 1.0)) return true;
   for (const w of m.walls) {
     for (let i = 1; i < 6; i++) {
       const x = a.x + (b.x - a.x) * (i / 6), z = a.z + (b.z - a.z) * (i / 6);
@@ -51,7 +91,7 @@ export function think(m, p, dt) {
     const dx = target.x - p.x, dz = target.z - p.z, d = Math.hypot(dx, dz) || 1;
     // approach, with a bit of curve so it doesn't look robotic
     const curve = Math.sin(m.time * 1.3 + p.id) * 0.35;
-    ai.move = { x: dx / d - (dz / d) * curve, z: dz / d + (dx / d) * curve };
+    ai.move = avoid(m, p, dx / d - (dz / d) * curve, dz / d + (dx / d) * curve);
     it.mx = ai.move.x; it.mz = ai.move.z;
     const range = 4.5 + 4 * s + (urgent ? 5 : 0);
     if (p.lock <= 0 && !p.action && d < range && !blockedByWall(m, p, target)) {
@@ -139,7 +179,7 @@ export function think(m, p, dt) {
   fx += Math.sin(m.time * 0.7 + p.id * 3) * 0.25;
   fz += Math.cos(m.time * 0.9 + p.id * 5) * 0.25;
   const l = Math.hypot(fx, fz);
-  ai.move = l > 0.15 ? { x: fx / l, z: fz / l } : { x: 0, z: 0 };
+  ai.move = l > 0.15 ? avoid(m, p, fx / l, fz / l) : { x: 0, z: 0 };
   if (threatened && p.cd.def <= 0 && Math.random() < 0.08 * s) it.skillPressed = true;
   it.mx = ai.move.x; it.mz = ai.move.z;
   return it;

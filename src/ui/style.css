@@ -141,7 +141,35 @@ button { font: inherit; color: inherit; }
 .hud-joy .knob { position: absolute; left: 50%; top: 50%; width: 42%; height: 42%; margin: -21% 0 0 -21%; border-radius: 50%; background: rgba(243, 233, 210, 0.75); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35); }
 
 .hud-help { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 10px; font-size: 12px; color: var(--ink-dim); background: rgba(14, 21, 36, 0.75); padding: 4px 10px; border: 1px solid var(--line); }
-@media (pointer: coarse) { .hud-help { display: none; } }
+/* Control modes (set by Hud.applyControls) */
+.hud.no-player .hud-joy, .hud.no-player .hud-actions, .hud.no-player .hud-help { display: none; }
+.hud.ctl-keys .hud-joy { display: none; }
+.hud.ctl-touch .hud-help { display: none; }
+.act .hot { display: none; }
+/* Keyboard: the action buttons become a compact ability bar with key caps */
+.hud.ctl-keys .hud-actions { left: 50%; right: auto; bottom: 44px; width: auto; height: auto; display: flex; gap: 12px; align-items: flex-end; transform: translateX(-50%) scale(var(--hud-scale)); transform-origin: bottom center; }
+.hud.ctl-keys .hud-actions * { pointer-events: none; }
+.hud.ctl-keys .act { position: relative; inset: auto; width: 54px; height: 54px; border-radius: 8px; overflow: visible; }
+.hud.ctl-keys .act.a { box-shadow: 0 3px 0 #9a6a1a; }
+.hud.ctl-keys .act.b { border-width: 2px; }
+.hud.ctl-keys .act.c { border-width: 2px; }
+.hud.ctl-keys .act .cd { border-radius: 6px; }
+.hud.ctl-keys .act .k { font-size: 16px; }
+.hud.ctl-keys .act .l { font-size: 10px; }
+.hud.ctl-keys .act .hot { display: block; position: absolute; top: -9px; left: -9px; min-width: 20px; text-align: center; font-family: var(--font-display); font-size: 10px; padding: 2px 4px; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 3px; }
+
+/* Pause button (left of the timer) */
+.hud-top { gap: 8px; align-items: flex-start; }
+.hud-pause { width: 40px; height: 40px; display: flex; gap: 5px; align-items: center; justify-content: center; background: var(--panel); border: 2px solid var(--line); box-shadow: var(--shadow-px); cursor: pointer; padding: 0; }
+.hud-pause i { width: 6px; height: 16px; background: var(--ink); display: block; }
+.hud-pause:hover { border-color: var(--accent); }
+.hud.no-player .hud-pause { display: none; }
+
+/* Off-screen ball pointer */
+.hud-offball { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.hud-offball i { position: absolute; left: -14px; top: -10px; width: 0; height: 0; border-left: 22px solid var(--ink); border-top: 10px solid transparent; border-bottom: 10px solid transparent; filter: drop-shadow(2px 2px 0 var(--panel)); }
+.hud-offball.hot i { border-left-color: #ff6a6a; animation: gb-blink 0.4s steps(2) infinite; }
+@keyframes gb-blink { 50% { opacity: 0.4; } }
 
 .hud-vignette { position: absolute; inset: 0; box-shadow: inset 0 0 120px 30px rgba(220, 67, 67, 0); transition: box-shadow 0.2s steps(3); }
 .hud-vignette.on { box-shadow: inset 0 0 140px 40px rgba(220, 67, 67, 0.45); }
@@ -183,6 +211,9 @@ button { font: inherit; color: inherit; }
   .hud-card .portrait { width: 42px; height: 42px; }
   .hud-card .info { min-width: 0; padding: 4px 7px; }
   .hud-card .role { display: none; }
+  .hud-card .gb-pips { gap: 2px; flex-wrap: wrap; max-width: 92px; }
+  .hud-card .gb-pips i { width: 7px; height: 7px; border-width: 1px; }
+  .hud-pause { width: 34px; height: 34px; }
   .hud-alive { top: 66px; left: 10px; right: auto; justify-content: flex-start; max-width: calc(100% - 20px); transform-origin: top left; }
   .hud-alive .mini { width: 22px; height: 22px; }
   .hud-feed { top: 100px; }

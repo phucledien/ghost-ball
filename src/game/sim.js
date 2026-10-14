@@ -6,6 +6,7 @@ import { MODES } from './modes.js';
 import { ITEMS, ITEM_IDS } from './items.js';
 import { SKILLS } from './skills.js';
 import { think } from './ai.js';
+import { ZONES, zoneAt, pushOut, segmentBlocked } from './maps.js';
 import { buildHero, applyPose, footWorld } from '../engine/hero-model.js';
 import { buildBall, buildItemCrate, buildMarker, buildArrow } from '../engine/props.js';
 import { POSES, actionPose, locomotionPose, lerpPose, totalDuration, phaseAt } from '../engine/anim.js';
@@ -15,7 +16,9 @@ const G = 30; // ball gravity
 const BOT_NAMES = ['RIO', 'ZEN', 'KOA', 'VEX', 'MOR', 'TAJ', 'ODE', 'PIK', 'SUN', 'YUL', 'NIX', 'AXE'];
 
 export class Match {
-  constructor({ stage, vfx, arena, C, humanHero = null, modeId = null, lab = false }) {
+  constructor({ stage, vfx, arena, C, humanHero = null, modeId = null, lab = false, playersBonus = 0, loadout = null }) {
+    this.playersBonus = playersBonus;
+    this.loadout = loadout; // cosmetics for the human's striker
     this.lab = lab; // editor Skill Lab: no rounds, no bots, no items
     this.stage = stage;
     this.vfx = vfx;
@@ -59,7 +62,7 @@ export class Match {
   // ── Setup ──────────────────────────────────────────────────────────────
   start() {
     const C = this.C;
-    const count = Math.round(C('rules.players') + (this.mode.playersBonus || 0));
+    const count = Math.min(14, Math.round(C('rules.players') + (this.mode.playersBonus || 0) + this.playersBonus));
     const roster = [];
     if (this.humanHero) roster.push(this.humanHero);
     const pool = HEROES.map((h) => h.id);
@@ -72,7 +75,7 @@ export class Match {
 
   addPlayer(heroId, human, name) {
     const hero = HERO_BY_ID[heroId];
-    const model = buildHero(heroId, this.C);
+    const model = buildHero(heroId, this.C, human ? this.loadout : null);
     this.group.add(model);
     const marker = buildMarker(human ? '#e8a93a' : '#ffffff');
     marker.children[0].material.opacity = human ? 0.95 : 0.25;
@@ -82,8 +85,8 @@ export class Match {
       x: 0, z: 0, y: 0, vx: 0, vz: 0, fx: 0, fz: 1, cyc: Math.random() * 6,
       model, marker, cd: { atk: 2, def: 2, dash: 0 }, lock: 0, stun: 0, freeze: 0,
       action: null, charge: -1, item: null, magnet: false,
-      t: { cleats: 0, shield: 0, cloak: 0, invuln: 0, slow: 0, crown: 0, trap: 0, blitz: 0, leap: 0, dash: 0 },
-      slowMul: 1, timeScale: 1, poseAcc: 1, pose: { ...POSES.idle }, ai: { t: 0, move: { x: 0, z: 0 } },
+      t: { cleats: 0, shield: 0, cloak: 0, invuln: 0, haste: 0, crown: 0, trap: 0, blitz: 0, leap: 0, dash: 0 },
+      zone: null, poseAcc: 1, pose: { ...POSES.idle }, ai: { t: 0, move: { x: 0, z: 0 } },
       dashDir: { x: 0, z: 1 }, leap: null, shieldFx: null,
     };
     this.players.push(p);
@@ -99,6 +102,7 @@ export class Match {
       p.z = Math.sin(a) * this.D * 0.32;
       p.vx = p.vz = 0;
       p.fx = -Math.cos(a); p.fz = -Math.sin(a);
+      this.solid(p);
     });
   }
 
@@ -222,6 +226,7 @@ export class Match {
       out.delete(keep);
     }
     for (const b of this.balls) this.explodeBall(b);
+    this.emit('buzzer', { out: out.size });
     for (const p of out) this.eliminate(p, 'buzzer');
     this.phase = 'boom';
     this.phaseT = 1.6;
@@ -273,11 +278,9 @@ export class Match {
     if (p.heroId === 'bolt') s *= C('hero.bolt.passive.speed');
     if (this.holding(p)) s *= C('move.holderMul');
     if (p.t.cleats > 0) s *= C('item.cleats.speed');
-    // Magnus Field: slowed near a Kaiz who has the ball
-    for (const k of this.players) {
-      if (k === p || !k.alive || k.heroId !== 'kaiz' || !this.holding(k)) continue;
-      if (Math.hypot(k.x - p.x, k.z - p.z) < C('hero.kaiz.passive.radius')) s *= C('hero.kaiz.passive.slow');
-    }
+    if (p.t.haste > 0) s *= C('hero.nova.def.speed');
+    if (p.heroId === 'kaiz' && this.holding(p)) s *= C('hero.kaiz.passive.holdSpeed');
+    if (p.zone) s *= p.zone.speed;
     return s;
   }
 
@@ -289,10 +292,9 @@ export class Match {
       return;
     }
     const C = this.C;
-    const dt = rdt * p.timeScale;
+    const dt = rdt;
     // Timers
     for (const k in p.t) if (p.t[k] > 0) p.t[k] = Math.max(0, p.t[k] - dt);
-    if (p.t.slow <= 0) p.timeScale = 1;
     const moving = Math.hypot(p.vx, p.vz) > 0.6;
     const regen = p.heroId === 'echo' && !moving ? C('hero.echo.passive.idleRegen') : 1;
     p.cd.atk = Math.max(0, p.cd.atk - dt * regen);
@@ -318,8 +320,14 @@ export class Match {
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
 
+    // Terrain under your feet
+    const zq = this.arena.zones?.length ? zoneAt(this.arena.zones, p.x, p.z) : null;
+    p.zone = zq && !p.leap ? ZONES[zq.kind] : null;
+    p.zoneKind = p.zone ? zq.kind : null;
+    const grip = p.zone ? p.zone.accel : 1, slide = p.zone ? p.zone.friction : 1;
+
     // Movement
-    const sp = this.speedOf(p) * (p.charge >= 0 ? 0.55 : 1) * (p.action?.moveMul ?? 1);
+    const sp = this.speedOf(p) * (p.charge >= 0 ? C('move.chargeMul') : 1) * (p.action?.moveMul ?? 1);
     if (p.t.blitz > 0) {
       p.vx = p.dashDir.x * C('hero.bolt.atk.speed');
       p.vz = p.dashDir.z * C('hero.bolt.atk.speed');
@@ -334,28 +342,31 @@ export class Match {
       p.y = Math.sin(u * Math.PI) * L.h;
       p.vx = p.vz = 0;
       if (Math.random() < 0.6) this.vfx.afterimage(p.model, C('hero.bolt.fx'), 0.2, 0.35);
-      if (u >= 1) { p.leap = null; p.y = 0; this.vfx.dust({ x: p.x, y: 0.1, z: p.z }, 10, this.arena.theme.speck[0]); this.vfx.ring({ x: p.x, z: p.z }, { color: '#ffffff', r0: 0.3, r1: 1.6, time: 0.25 }); }
+      if (u >= 1) { p.leap = null; p.y = 0; this.solid(p); this.vfx.dust({ x: p.x, y: 0.1, z: p.z }, 10, this.arena.theme.speck[0]); this.vfx.ring({ x: p.x, z: p.z }, { color: '#ffffff', r0: 0.3, r1: 1.6, time: 0.25 }); }
     } else if (p.t.dash > 0) {
       p.vx = p.dashDir.x * C('move.dashSpeed');
       p.vz = p.dashDir.z * C('move.dashSpeed');
       if (Math.random() < 0.7) this.vfx.afterimage(p.model, C(`hero.${p.heroId}.fx`), 0.18, 0.35);
     } else if (disabled) {
-      const f = Math.exp(-C('move.friction') * dt * 0.5);
+      const f = Math.exp(-C('move.friction') * slide * dt * 0.5);
       p.vx *= f; p.vz *= f;
     } else if (len > 0.05) {
-      const a = C('move.accel') * dt;
+      const a = C('move.accel') * grip * dt;
       const tx = mx * sp, tz = mz * sp;
       const dx = tx - p.vx, dz = tz - p.vz;
       const dl = Math.hypot(dx, dz);
       if (dl <= a) { p.vx = tx; p.vz = tz; } else { p.vx += (dx / dl) * a; p.vz += (dz / dl) * a; }
     } else {
-      const f = Math.exp(-C('move.friction') * dt);
+      const f = Math.exp(-C('move.friction') * slide * dt);
       p.vx *= f; p.vz *= f;
     }
     p.x += p.vx * dt;
     p.z += p.vz * dt;
     this.clampToField(p);
     this.collideWalls(p);
+    if (!p.leap) this.solid(p);
+    if (p.zoneKind === 'ice' && Math.hypot(p.vx, p.vz) > 3 && Math.random() < dt * 10) this.vfx.trail({ x: p.x, y: 0.06, z: p.z }, '#eaf8ff', 0.14, 0.4);
+    if (p.zoneKind === 'boost' && Math.random() < dt * 14) this.vfx.trail({ x: p.x + (Math.random() - 0.5) * 0.5, y: 0.1 + Math.random() * 0.8, z: p.z + (Math.random() - 0.5) * 0.5 }, '#5ad8ff', 0.12, 0.3);
 
     // Facing
     let fx = p.fx, fz = p.fz;
@@ -386,6 +397,43 @@ export class Match {
     if (p.x > hw) { p.x = hw; p.vx = Math.min(0, p.vx); }
     if (p.z < -hd) { p.z = -hd; p.vz = Math.max(0, p.vz); }
     if (p.z > hd) { p.z = hd; p.vz = Math.min(0, p.vz); }
+  }
+
+  // Push a player out of map obstacles and cancel velocity into the surface.
+  solid(p) {
+    const obs = this.arena.obstacles;
+    if (!obs?.length) return;
+    const hit = pushOut(obs, p, this.C('move.radius'));
+    if (!hit) return;
+    const vn = p.vx * hit.nx + p.vz * hit.nz;
+    if (vn < 0) { p.vx -= vn * hit.nx; p.vz -= vn * hit.nz; }
+  }
+
+  // Ball vs map obstacles: bounce off anything taller than the ball's height.
+  ballObstacles(b) {
+    const obs = this.arena.obstacles;
+    if (!obs?.length) return;
+    const r = this.C('ball.size');
+    for (const o of obs) {
+      if (b.y - r > o.h) continue;
+      const pos = { x: b.x, z: b.z };
+      const hit = pushOut([o], pos, r);
+      if (!hit) continue;
+      b.x = pos.x; b.z = pos.z;
+      const vn = b.vx * hit.nx + b.vz * hit.nz;
+      if (vn < 0) {
+        b.vx -= 2 * vn * hit.nx; b.vz -= 2 * vn * hit.nz;
+        b.vx *= 0.72; b.vz *= 0.72;
+        b.homing = null;
+        if (b.state === 'flight') b.state = 'loose';
+        if (b.decoy) { this.popDecoy(b); return; }
+        if (-vn > 4) {
+          this.vfx.burst({ x: b.x, y: b.y, z: b.z }, { count: 10, color: ['#ffffff', this.arena.theme.speck[0]], speed: 4, up: 3, life: 0.3, size: 0.12 });
+          this.emit('bounce', {});
+          this.stage.shake(0.08);
+        }
+      }
+    }
   }
 
   separate() {
@@ -482,7 +530,7 @@ export class Match {
   startAction(p, id, hooks = {}, opts = {}) {
     const C = this.C;
     const phases = phasesFor(id, C);
-    p.action = { id, t: 0, phases, total: totalDuration(phases), amp: ampFor(id, C), hooks, fired: new Set(), from: { ...p.pose }, moveMul: opts.moveMul ?? (id === 'dash' ? 1 : 0.35), lockFacing: opts.lockFacing ?? true };
+    p.action = { id, t: 0, phases, total: totalDuration(phases), amp: ampFor(id, C), hooks, fired: new Set(), from: { ...p.pose }, moveMul: opts.moveMul ?? (id === 'dash' ? 1 : C('move.actionMul')), lockFacing: opts.lockFacing ?? true };
     this.fireHooks(p);
   }
 
@@ -523,9 +571,11 @@ export class Match {
       const dx = o.x - p.x, dz = o.z - p.z;
       const d = Math.hypot(dx, dz);
       if (d > range || d < 0.01) continue;
+      if (o.zoneKind === 'grass' && d > 4) continue; // hidden in the long grass
       const ang = Math.acos(Math.max(-1, Math.min(1, (dx * dir.x + dz * dir.z) / d)));
       if (ang > cone) continue;
-      const score = ang * 4 + d * 0.15;
+      let score = ang * 4 + d * 0.15;
+      if (this.arena.obstacles?.length && segmentBlocked(this.arena.obstacles, p, o, 1.2)) score += 2.5;
       if (score < bestScore) { bestScore = score; best = o; }
     }
     return best;
@@ -596,9 +646,7 @@ export class Match {
     if (b.state === 'dead') return;
     const C = this.C;
     const r = C('ball.size');
-    // Field Read slows the ball too
-    const slowed = this.fieldRead && this.fieldRead.until > this.time;
-    const bdt = slowed ? dt * C('hero.nova.def.slow') : dt;
+    const bdt = dt;
 
     if (b.state === 'held') {
       const p = b.owner;
@@ -610,6 +658,7 @@ export class Match {
         b.fuse -= dt;
         if (b.fuse <= 0) {
           this.explodeBall(b);
+          this.emit('buzzer', { out: 1 });
           this.eliminate(p, 'fuse');
           this.phase = 'boom';
           this.phaseT = 1.6;
@@ -626,6 +675,7 @@ export class Match {
       if (b.fuse <= 0) {
         const c = this.culpritOf(b);
         this.explodeBall(b);
+        this.emit('buzzer', { out: c ? 1 : 0 });
         if (c) this.eliminate(c, 'fuse');
         this.phase = 'boom';
         this.phaseT = 1.6;
@@ -678,6 +728,8 @@ export class Match {
     if (b.z < -hd) { b.z = -hd; b.vz = Math.abs(b.vz) * k; this.bounceFx(b); }
     if (b.z > hd) { b.z = hd; b.vz = -Math.abs(b.vz) * k; this.bounceFx(b); }
     this.ballWalls(b);
+    this.ballObstacles(b);
+    if (b.dead) return;
     if (b.state === 'flight' || Math.hypot(b.vx, b.vz) > 2) {
       b.trailAcc = (b.trailAcc || 0) + bdt;
       if (b.trailAcc > 0.016) { b.trailAcc = 0; this.vfx.trail({ x: b.x, y: b.y, z: b.z }, b.color, 0.24); }
@@ -754,9 +806,9 @@ export class Match {
       this.stage.shake(0.5);
       this.vfx.burst({ x: p.x, y: 1.2, z: p.z }, { count: 26, color: [b.color, '#ffffff'], glow: true, speed: 9, up: 6, life: 0.5 });
     } else if (b.state === 'held' && !p.action) {
-      this.startAction(p, 'catch', {}, { moveMul: 0.7, lockFacing: false });
+      this.startAction(p, 'catch', {}, { moveMul: 0.9, lockFacing: false });
     }
-    this.hitstop = Math.max(this.hitstop, C('fx.hitstop') * Math.min(1.6, sp / 14));
+    this.hitstop = Math.max(this.hitstop, C('fx.hitstop') * Math.min(1.2, sp / 16));
     this.vfx.ring({ x: p.x, z: p.z }, { color: b.color, r0: 0.3, r1: 1.8, time: 0.25 });
     this.vfx.burst({ x: b.x, y: b.y, z: b.z }, { count: 10, color: [b.color, '#ffffff'], glow: true, speed: 4, up: 3, life: 0.3, size: 0.12 });
     b.stun = 0; b.knock = 0;
@@ -873,7 +925,8 @@ export class Match {
     for (let tries = 0; tries < 12; tries++) {
       x = (Math.random() - 0.5) * (this.W - 3);
       z = (Math.random() - 0.5) * (this.D - 3);
-      if (this.alive.every((p) => Math.hypot(p.x - x, p.z - z) > 2.5)) break;
+      const free = !pushOut(this.arena.obstacles || [], { x, z }, 0.6);
+      if (free && this.alive.every((p) => Math.hypot(p.x - x, p.z - z) > 2.5)) break;
     }
     const mesh = buildItemCrate(id);
     mesh.position.set(x, 0, z);
@@ -989,7 +1042,7 @@ export class Match {
       if (ball && C('camera.followBall')) t.lerp(new THREE.Vector3(ball.x, 0, ball.z), 0.3);
     } else if (ball && C('camera.followBall')) t.set(ball.x, 0, ball.z);
     else t.set(0, 0, 0);
-    const lim = 0.3;
+    const lim = 0.36;
     t.x = Math.max(-this.arena.W * lim, Math.min(this.arena.W * lim, t.x));
     t.z = Math.max(-this.arena.D * lim, Math.min(this.arena.D * lim, t.z));
     const k = 1 - Math.pow(1 - C('camera.follow'), dt * 60);
