@@ -6,6 +6,11 @@ import os from 'node:os';
 const LOCKED = resolve(__dirname, 'config/locked.json');
 const HISTORY = resolve(__dirname, 'config/history');
 
+// Keep local Mac artifacts outside synced folders; CI hosts use standard dist.
+const macBuildRoot = resolve(os.homedir(), 'Library/Developer/CodexBuilds/ghost-ball');
+const defaultOutDir = process.platform === 'darwin' ? resolve(macBuildRoot, 'dist') : resolve(__dirname, 'dist');
+const defaultCacheDir = process.platform === 'darwin' ? resolve(macBuildRoot, 'vite-cache') : resolve(__dirname, 'node_modules/.vite');
+
 // Dev-only API: the editor "Lock" button writes tuned values to disk so they
 // become the game's baseline (and so Claude can read them next session).
 function lockApi() {
@@ -47,11 +52,11 @@ function lockApi() {
 export default defineConfig({
   base: './', // relative asset URLs so the build works when hosted under any path
   plugins: [lockApi()],
-  cacheDir: process.env.GHOST_VITE_CACHE || resolve(os.homedir(), 'Library/Developer/CodexBuilds/ghost-ball/vite-cache'),
+  cacheDir: process.env.GHOST_VITE_CACHE || defaultCacheDir,
   // Locking writes config/*.json — don't let that hot-reload open pages.
   server: { port: 5173, watch: { ignored: ['**/config/**'] } },
   build: {
-    outDir: process.env.GHOST_BUILD_DIR || resolve(os.homedir(), 'Library/Developer/CodexBuilds/ghost-ball/dist'),
+    outDir: process.env.GHOST_BUILD_DIR || defaultOutDir,
     emptyOutDir: true,
     target: 'es2022', // top-level await; Safari 15+ / iOS 15+
     rollupOptions: {

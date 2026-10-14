@@ -146,7 +146,15 @@ npm run build
 npm run preview
 ```
 
-Build output defaults to `~/Library/Developer/CodexBuilds/ghost-ball/dist`. Override with `GHOST_BUILD_DIR` when needed; use a real local directory outside iCloud Drive. Vite's cache also lives under `~/Library/Developer/CodexBuilds`.
+On macOS, build output defaults to `~/Library/Developer/CodexBuilds/ghost-ball/dist`, with Vite's cache alongside it. Other platforms, including Cloudflare's Linux builders, use `dist/` and `node_modules/.vite/`. Override with `GHOST_BUILD_DIR` and `GHOST_VITE_CACHE` when needed; local artifacts must stay in a real local directory outside iCloud Drive.
+
+### Deploy to Cloudflare
+
+Use the repository root and `bun run build` as the build command. For **Pages**, set the build output directory to `dist`. For **Workers Builds**, deploy the static output with `npx wrangler deploy --assets ./dist`. The game requires no server-side runtime; all six HTML entry points and their assets are included in the build.
+
+The committed lockfile is verified with Bun **1.2.15**. Set the Cloudflare build variable `BUN_VERSION=1.2.15` to use that version. Keep Cloudflare's frozen install enabled: after changing dependencies, run `bun install`, commit both `package.json` and `bun.lock`, then verify `bun install --frozen-lockfile` before pushing.
+
+See Cloudflare's [build environment settings](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/) and [static asset deployment guide](https://developers.cloudflare.com/workers/static-assets/get-started/). The editor's **Lock** API is available only on the local development server; hosted builds support **Copy JSON** instead.
 
 ### Tune the game
 
