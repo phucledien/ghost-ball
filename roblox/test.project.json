@@ -44,6 +44,12 @@
     },
     "CameraController": {
      "$path": "src/client/CameraController.luau"
+    },
+    "HUD": {
+     "$path": "src/client/HUD.luau"
+    },
+    "HUDLayout": {
+     "$path": "tests/HUDLayout.luau"
     }
    }
   }

@@ -5,6 +5,10 @@ return function(sim: any, P: any,advance: ((number) -> ())?)
  local function reject(reason: string): boolean
   rejected[reason]=(rejected[reason] or 0)+1; return false
  end
+ local function senderActor(id: number): any
+  for _,a in sim.actors do if a.userId==id then return a end end
+  return nil
+ end
  local function receive(player: any,channel: any,p: any,now: number): boolean
   local id=player.UserId
   local c=clients[id]
@@ -19,15 +23,22 @@ return function(sim: any, P: any,advance: ((number) -> ())?)
    if advance then advance(now) end; sim:resolve(now); return true
   end
   if p.matchId~=sim.matchId or p.roundId~=sim.roundId then return reject('epoch') end
-  local a=nil
-  for _,v in sim.actors do if v.userId==id then a=v; break end end
-  if not a or not a.alive then return reject('spectator') end
+  do
+   local a=senderActor(id)
+   if not a or not a.alive then return reject('spectator') end
+  end
   local key=if channel=='Move' then 'seqMove' else 'seqAction'
   if p.seq<=c[key] then return reject('replay') end
   c[key]=p.seq
   -- Only bounded, validated, current-epoch, live-sender, non-replayed traffic
   -- may flush the simulation. sim:command still resolves the wall deadline first.
   if advance then advance(now) end
+  sim:resolve(now)
+  -- Advancement can replace the epoch and the entire sorted roster. Never reuse
+  -- a pre-flush slot/reference, even if its numerical id still exists.
+  if p.matchId~=sim.matchId or p.roundId~=sim.roundId then return reject('epoch') end
+  local a=senderActor(id)
+  if not a or not a.alive then return reject('spectator') end
   if not sim:command(a.id,if channel=='Move' then 'Move' else p.action,p,now) then return reject('illegal') end
   if channel=='Move' then a.moveSeq=p.seq else a.actionSeq=p.seq end
   return true

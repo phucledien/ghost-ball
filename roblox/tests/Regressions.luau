@@ -280,6 +280,85 @@ return function(R: any,M: any,move: any,Sim: any,P: any,Gateway: any,Clock: any,
   g.receive({UserId=202},'Move',payload(4),d)
   assert(not s.actors[1].alive and s.actors[2].alive)
  end)
+ local function packet(s: any,seq: number,kind: string): any
+  if kind=='Move' then return {matchId=s.matchId,roundId=s.roundId,seq=seq,moveX=1,moveZ=0,aimX=1,aimZ=0} end
+  return {matchId=s.matchId,roundId=s.roundId,seq=seq,action=kind,aimX=1,aimZ=0}
+ end
+ test('GBQA-08 result transition revalidates epoch for every command and reordered/unchanged roster',function()
+  local cases=0
+  for _,delta in {-1e-6,0,1e-6} do for _,roster in {'unchanged','join50','leave101','join50leave101','join303'} do
+   for _,kind in {'Move','Press','Release','Dash','Cancel','Forfeit'} do
+    local s=play()
+    for _,id in {1,3,4,5,6,7,8} do s:forfeit(id,s.now) end
+    assert(s.phase=='result' and s.winner==2)
+    if roster=='join50' or roster=='join50leave101' then s:join(50,'Late',s.now) end
+    if roster=='join303' then s:join(303,'Late',s.now) end
+    if roster=='leave101' or roster=='join50leave101' then s:leave(101,s.now) end
+    local epoch=s.matchId; local deadline=s.deadline; local flushes=0; local drive=Clock(s,R,s.now)
+    local g=Gateway(s,P,function(now: number) flushes+=1; drive(now) end)
+    local payload=packet(s,1,kind); local channel=if kind=='Move' then 'Move' else 'Action'
+    local accepted=g.receive({UserId=202},channel,payload,deadline+delta)
+    assert(flushes==1) -- initially valid requests may become stale during a legitimate flush
+    local counts=g.diagnostics()
+    if delta<0 then
+     assert(s.matchId==epoch and accepted==(kind=='Forfeit'))
+     assert((counts.illegal or 0)==(if kind=='Forfeit' then 0 else 1) and counts.epoch==nil)
+     assert(s.actors[2].alive) -- Forfeit is an accepted no-op during result
+    else
+     assert(s.matchId==epoch+1 and not accepted and counts.epoch==1)
+     for _,actor in s.actors do
+      assert(actor.alive and actor.mx==0 and actor.mz==0 and actor.moveSeq==0 and actor.actionSeq==0)
+     end
+     -- Same old epoch is now rejected at the cheap gate without another flush.
+     payload.seq=2; assert(not g.receive({UserId=202},channel,payload,deadline+delta))
+     assert(flushes==1 and g.diagnostics().epoch==1)
+     -- A fresh new-epoch peer may forfeit only itself; identity comes from this roster.
+     local peer=s.actors[1].userId; local fresh=packet(s,3,'Forfeit')
+     assert(g.receive({UserId=peer},'Action',fresh,deadline+delta+0.001))
+     for _,actor in s.actors do assert(actor.alive==(actor.userId~=peer)) end
+     assert(flushes==2 and next(g.diagnostics())==nil)
+    end
+    assert(next(g.diagnostics())==nil) -- rejection reporting drains exactly once
+    cases+=1
+   end
+  end end
+  print('GATEWAY result boundary cases',cases)
+ end)
+ test('GBQA-08 live sender is resolved afresh after replacement or leave even within same epoch',function()
+  for _,depart in {false,true} do
+   local s=play(); local old=s.actors[2]; local g=Gateway(s,P,function(now: number)
+    if depart then s:leave(202,now) else
+     local moved=table.clone(old); moved.id=3
+     local vacated=table.clone(s.actors[3]); vacated.id=2
+     s.actors[2]=vacated; s.actors[3]=moved
+    end
+   end)
+   local payload=packet(s,1,'Move'); local ok=g.receive({UserId=202},'Move',payload,s.now+0.01)
+   if depart then assert(not ok and g.diagnostics().spectator==1)
+   else
+    assert(ok and s.actors[3].userId==202 and s.actors[3].mx==1 and s.actors[3].moveSeq==1)
+    assert(s.actors[2].mx==0 and old.mx==0 and old.moveSeq==0)
+   end
+  end
+ end)
+ test('GBQA-08 pre-gate invalid traffic never flushes; post-flush stale traffic counts rejection',function()
+  local s=play(); local flushes=0
+  local g=Gateway(s,P,function(now: number) flushes+=1; s:resolve(now) end)
+  local t=s.now+0.01; local payload=packet(s,1,'Move')
+  assert(not g.receive({UserId=202},'Unknown',{},t)); assert(flushes==0 and g.diagnostics().schema==1)
+  local stale=table.clone(payload); stale.matchId-=1
+  assert(not g.receive({UserId=202},'Move',stale,t)); assert(flushes==0 and g.diagnostics().epoch==1)
+  assert(g.receive({UserId=202},'Move',payload,t)); assert(flushes==1)
+  assert(not g.receive({UserId=202},'Move',payload,t)); assert(flushes==1 and g.diagnostics().replay==1)
+  assert(not g.receive({UserId=999},'Move',payload,t)); assert(flushes==1 and g.diagnostics().spectator==1)
+  for seq=2,3 do local p=packet(s,seq,'Move'); assert(g.receive({UserId=202},'Move',p,t)) end
+  local before=flushes
+  local accepted=0
+  for seq=4,103 do if g.receive({UserId=202},'Move',packet(s,seq,'Move'),t) then accepted+=1 end end
+  assert(accepted==0 and flushes==before and g.diagnostics().rate==100)
+  -- Rejection traffic did not consume a legitimate peer's independent bucket.
+  assert(g.receive({UserId=101},'Move',packet(s,1,'Move'),t)); assert(flushes==before+1)
+ end)
  print('GBQA SUMMARY',passed,'pass',failed,'fail; offline only')
  assert(failed==0,'GBQA regression failures: '..failed)
 end

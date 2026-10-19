@@ -113,7 +113,7 @@ def check():
  analyze=output('tools/luau-analyze'); compile_=output('tools/luau-compile'); luau=output('tools/luau')
  # The CLI lacks Roblox engine definitions: type-check pure modules and compile every engine module.
  pure=list(sorted((SOURCE/'src/shared').glob('*.luau')))
- run([analyze,*pure,SOURCE/'src/server/InputGateway.luau',SOURCE/'tests/Run.luau',SOURCE/'tests/Suite.luau',SOURCE/'tests/Regressions.luau',SOURCE/'tests/InputHandlers.luau',SOURCE/'tests/CameraAdapter.luau',SOURCE/'src/client/Prediction.luau'],log)
+ run([analyze,*pure,SOURCE/'src/server/InputGateway.luau',SOURCE/'tests/Run.luau',SOURCE/'tests/Suite.luau',SOURCE/'tests/Regressions.luau',SOURCE/'tests/InputHandlers.luau',SOURCE/'tests/CameraAdapter.luau',SOURCE/'tests/HUDLayout.luau',SOURCE/'src/client/Prediction.luau'],log)
  for file in sorted(SOURCE.rglob('*.luau')): run([compile_,'--null',file],log)
  run([luau,SOURCE/'tests/Run.luau'],log)
  run([luau,SOURCE/'tests/RunInput.luau'],log)

@@ -26,6 +26,7 @@ return function(factory: any)
   local inset=vec(44,36)
   local GS={MenuOpened=signal(),MenuClosed=signal(),MenuIsOpen=false,GetGuiInset=function() return inset,vec(0,0) end}
   local instances={}
+  local moveSignal: any=nil; local actionSignal: any=nil
   local camera: any={CFrame={RightVector=vec(1,0,0),LookVector=vec(0,0,-1)}}
   local rays={}
   camera.ScreenPointToRay=function(_: any,x: number,y: number)
@@ -38,7 +39,15 @@ return function(factory: any)
     return if name=='UserInputService' then UIS elseif name=='GuiService' then GS else {LocalPlayer={WaitForChild=function() return {} end}}
    end},workspace={CurrentCamera=camera},
    Instance={new=function(kind: string)
-    local i={kind=kind,Pressed=signal(),Released=signal(),StateChanged=signal()}; table.insert(instances,i); return i
+    local i: any={kind=kind,Pressed=signal(),Released=signal(),StateChanged=signal()}
+    local proxy=setmetatable({},{__index=i,__newindex=function(_: any,key: any,value: any)
+     local previous=i[key]; i[key]=value
+     if key=='Name' and value=='Move' then moveSignal=i elseif key=='Name' and value=='Primary' then actionSignal=i end
+     if kind=='InputContext' and key=='Enabled' and previous==true and value==false then
+      actionSignal.Released.fire(); moveSignal.StateChanged.fire(vec(0,0))
+     end
+    end})
+    table.insert(instances,proxy); return proxy
    end},Vector2={zero=vec(0,0),new=vec},Vector3={new=vec},
    Enum={InputActionType={Direction2D='D2',Bool='Bool'},KeyCode={W='W',S='S',A='A',D='D',Up='Up',Down='Down',Left='Left',Right='Right',Space='Space',J='J'},UserInputType={Touch='Touch',MouseButton1='Mouse'},UserInputState={Cancel='Cancel'}}}
   local hud={joystick={InputBegan=signal(),AbsolutePosition=vec(0,0),AbsoluteSize=vec(108,108)},primary={InputBegan=signal()}}
@@ -119,6 +128,65 @@ return function(factory: any)
    local ray=t.rays[#t.rays]
    assert(ray.method=='Screen' and ray.x==400-inset[1] and ray.y==236-inset[2])
   end
+ end)
+ test('GBQA-03 keyboard Cancel suppresses Released in either terminal order and matches active input',function()
+  for _,key in {'Space','J'} do for _,path in {'InputEnded','InputChanged'} do
+   for _,iasPressFirst in {false,true} do for _,iasReleaseFirst in {false,true} do
+    local t=setup(); local p={UserInputType='Keyboard',KeyCode=key,UserInputState='Begin'}
+    if iasPressFirst then t.action.Pressed.fire() end
+    t.UIS.InputBegan.fire(p,false); t.action.Pressed.fire(); assert(t.input.down)
+    p.UserInputState='Cancel'
+    if iasReleaseFirst then t.action.Released.fire() end -- Cancel state already visible on tracked object
+    t.UIS[path].fire(p); t.action.Released.fire(); t.UIS.InputEnded.fire(p); t.UIS.InputChanged.fire(p)
+    assert(not t.input.down and #t.primary==1 and #t.sent==1 and t.sent[1]=='Cancel')
+    local fresh={UserInputType='Keyboard',KeyCode=key,UserInputState='Begin'}
+    t.UIS.InputBegan.fire(fresh,false); t.action.Pressed.fire(); assert(t.input.down)
+    t.UIS.InputChanged.fire(p); assert(t.input.down and #t.sent==1) -- stale duplicate Cancel
+    fresh.UserInputState='End'; t.UIS.InputEnded.fire(fresh); t.action.Released.fire()
+    assert(#t.primary==3 and t.primary[3]==false)
+   end end
+  end end
+  local withoutRaw=setup(); withoutRaw.action.Pressed.fire()
+  withoutRaw.UIS.InputEnded.fire({UserInputType='Keyboard',KeyCode='Space',UserInputState='Cancel'})
+  withoutRaw.action.Released.fire(); assert(not withoutRaw.input.down and #withoutRaw.primary==1 and #withoutRaw.sent==1)
+  local t=setup(); local active={UserInputType='Keyboard',KeyCode='Space',UserInputState='Begin'}
+  t.UIS.InputBegan.fire(active,false)
+  local other={UserInputType='Keyboard',KeyCode='J',UserInputState='Begin'}
+  t.UIS.InputBegan.fire(other,false); other.UserInputState='Cancel'; t.UIS.InputEnded.fire(other)
+  assert(t.input.down and #t.sent==0) -- a different key does not own this Primary
+  active.UserInputState='Cancel'; t.UIS.InputChanged.fire(active); t.action.Released.fire()
+  assert(not t.input.down and #t.primary==1 and #t.sent==1)
+ end)
+ test('GBQA-04 fresh movement works in both IAS/raw orders with stale held keys excluded',function()
+  for _,iasFirst in {false,true} do for _,gate in {'context','overlap'} do
+   local t=setup(); local held={UserInputType='Keyboard',KeyCode='D',UserInputState='Begin'}
+   t.UIS.InputBegan.fire(held,false); t.move.StateChanged.fire(vec(1,0)); t.input.update(nil); assert(t.input.mx==1)
+   if gate=='context' then t.input.setEnabled(false); t.input.setEnabled(true)
+   else
+    t.focus({}); t.UIS.TextBoxFocused.fire({}); t.GS.MenuIsOpen=true; t.GS.MenuOpened.fire()
+    t.UIS.WindowFocusReleased.fire(); t.input.setEnabled(false)
+    t.focus(nil); t.UIS.TextBoxFocusReleased.fire({}); t.GS.MenuIsOpen=false; t.GS.MenuClosed.fire()
+    t.UIS.WindowFocused.fire(); t.input.setEnabled(true)
+   end
+   for _,state in {vec(1,0),vec(0,0),vec(1,0),vec(1,0)} do t.move.StateChanged.fire(state); t.input.update(nil); assert(t.input.mx==0) end
+   local fresh={UserInputType='Keyboard',KeyCode='A',UserInputState='Begin'}
+   if iasFirst then t.move.StateChanged.fire(vec(-1,0)) end
+   t.UIS.InputBegan.fire(fresh,false)
+   if not iasFirst then t.move.StateChanged.fire(vec(-1,0)) end
+   t.input.update(nil); assert(t.input.mx==-1)
+   -- IAS can contain stale held D, or repeat neutral. Fresh A still owns movement.
+   for _,v in {vec(0,0),vec(1,0),vec(-1,0),vec(-1,0)} do t.move.StateChanged.fire(v); t.input.update(nil); assert(t.input.mx==-1) end
+   local up={UserInputType='Keyboard',KeyCode='W',UserInputState='Begin'}
+   t.UIS.InputBegan.fire(up,false); t.UIS.InputBegan.fire(up,false); t.input.update(nil)
+   assert(math.abs(t.input.mx+1/math.sqrt(2))<1e-7 and math.abs(t.input.mz+1/math.sqrt(2))<1e-7)
+   held.UserInputState='End'; t.UIS.InputEnded.fire(held); t.input.update(nil); assert(t.input.mx<0)
+   fresh.UserInputState='End'; t.UIS.InputEnded.fire(fresh); t.input.update(nil); assert(t.input.mx==0 and t.input.mz==-1)
+   up.UserInputState='End'; t.move.StateChanged.fire(vec(0,0)); t.UIS.InputEnded.fire(up)
+   t.move.StateChanged.fire(vec(1,0)); t.input.update(nil); assert(t.input.mx==0 and t.input.mz==0)
+   local nextKey={UserInputType='Keyboard',KeyCode='Left',UserInputState='Begin'}
+   t.UIS.InputBegan.fire(nextKey,false); t.input.update(nil); assert(t.input.mx==-1)
+   nextKey.UserInputState='Cancel'; t.UIS.InputChanged.fire(nextKey); t.input.update(nil); assert(t.input.mx==0)
+  end end
  end)
  print('INPUT SUMMARY',passed,'pass',failed,'fail; stand-ins only')
  assert(failed==0,'Input handler regression failures: '..failed)

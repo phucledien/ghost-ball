@@ -50,8 +50,8 @@ def verify():
   else:
    expected = {p for p in manifest['sourceFiles'] if p.startswith('roblox/src/shared/') and p.endswith('.luau')}
    expected.update('roblox/' + p for p in ['src/server/InputGateway.luau', 'src/client/Prediction.luau',
-    'src/client/InputController.luau', 'src/client/CameraController.luau', 'tests/Studio.server.luau',
-    'tests/Suite.luau', 'tests/Regressions.luau', 'tests/InputHandlers.luau', 'tests/CameraAdapter.luau'])
+    'src/client/InputController.luau', 'src/client/CameraController.luau', 'src/client/HUD.luau', 'tests/Studio.server.luau',
+    'tests/HUDLayout.luau', 'tests/Suite.luau', 'tests/Regressions.luau', 'tests/InputHandlers.luau', 'tests/CameraAdapter.luau'])
    assert not any(c in ('RemoteEvent', 'LocalScript') for c in classes)
   assert set(sources) == expected, (name, set(sources) ^ expected)
   print('PASS XML', name, len(sources), 'exact Source blobs', spec['bytes'], 'bytes', spec['sha256'])

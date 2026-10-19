@@ -22,11 +22,26 @@ return function(hud: any,send: any,primary: any,engine: any?)
  local stickTouch: InputObject?=nil; local aimTouch: InputObject?=nil
  local aimOrigin=Vector2.zero
  local wanted=false; local windowFocused=true; local textFocused=false; local menuOpen=false
- local awaitNeutral=false; local primaryArmed=true
+ local awaitNeutral=false; local primaryArmed=true; local primaryCancelled=false
+ local primaryInput: InputObject?=nil
+ local rawMoveKeys: {[any]: boolean}={}; local suppressedMoveKeys: {[any]: boolean}={}; local rawMovement=false
+ local moveAxes={
+  [Enum.KeyCode.W]=Vector2.new(0,1),[Enum.KeyCode.Up]=Vector2.new(0,1),
+  [Enum.KeyCode.S]=Vector2.new(0,-1),[Enum.KeyCode.Down]=Vector2.new(0,-1),
+  [Enum.KeyCode.A]=Vector2.new(-1,0),[Enum.KeyCode.Left]=Vector2.new(-1,0),
+  [Enum.KeyCode.D]=Vector2.new(1,0),[Enum.KeyCode.Right]=Vector2.new(1,0),
+ }
+ local function rawAxes()
+  local v=Vector2.zero
+  for key in rawMoveKeys do v+=moveAxes[key] end
+  keyboard=if v.Magnitude>1 then v.Unit else v
+ end
  local function cancel()
   local active=I.enabled or I.down or stickTouch~=nil or aimTouch~=nil
   I.down=false; I.mx,I.mz=0,0; keyboard=Vector2.zero; stick=Vector2.zero
-  stickTouch=nil; aimTouch=nil; awaitNeutral=true; primaryArmed=false
+  stickTouch=nil; aimTouch=nil; awaitNeutral=true; primaryArmed=false; primaryCancelled=true; primaryInput=nil
+  for key in rawMoveKeys do suppressedMoveKeys[key]=true end
+  table.clear(rawMoveKeys); rawMovement=false
   if active then send('Cancel') end
  end
  local function refresh()
@@ -37,45 +52,60 @@ return function(hud: any,send: any,primary: any,engine: any?)
   end
   I.enabled=enabled==true; context.Enabled=I.enabled
  end
- local function press(fresh: boolean?)
+ local function press(fresh: boolean?,source: InputObject?)
   refresh()
-  if not I.enabled or I.down then return end
+  if not I.enabled then return end
+  -- IAS may press before raw InputBegan. Attach its matching raw object afterward
+  -- so a Cancel already present at IAS Released can still be recognized.
+  if I.down then if not primaryInput then primaryInput=source end; return end
   if fresh then primaryArmed=true end
   if not primaryArmed then return end
-  I.down=true; primary(true)
+  primaryInput=source; primaryCancelled=false; I.down=true; primary(true)
  end
  local function release()
   refresh()
   if not I.enabled or not I.down then return end
-  I.down=false; primary(false)
+  I.down=false; primaryInput=nil; primary(false)
  end
  action.Pressed:Connect(function() press() end)
  action.Released:Connect(function()
+  if primaryInput and primaryInput.UserInputState==Enum.UserInputState.Cancel then cancel() end
+  if primaryCancelled then return end
   release(); if I.enabled then primaryArmed=true end
  end)
  move.StateChanged:Connect(function(v: Vector2)
   refresh()
-  if not I.enabled then return end
+  if not I.enabled or rawMovement or next(suppressedMoveKeys)~=nil then return end
   if v.Magnitude==0 then awaitNeutral=false end
   if not awaitNeutral then keyboard=v end
  end)
- local moveKeys={Enum.KeyCode.W,Enum.KeyCode.S,Enum.KeyCode.A,Enum.KeyCode.D,Enum.KeyCode.Up,Enum.KeyCode.Down,Enum.KeyCode.Left,Enum.KeyCode.Right}
  UIS.InputBegan:Connect(function(input,processed)
   refresh()
   I.lastPointer=if input.UserInputType==Enum.UserInputType.Touch then 'Touch' else 'Keyboard'
   if not I.enabled or processed then return end
-  if table.find(moveKeys,input.KeyCode) then awaitNeutral=false end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.Space or input.KeyCode==Enum.KeyCode.J then press(true) end
+  if moveAxes[input.KeyCode] then
+   -- Fresh raw keys determine their own direction. A preceding IAS state can be
+   -- stale or include a key held through a gate; do not resurrect that state.
+   suppressedMoveKeys[input.KeyCode]=nil; rawMoveKeys[input.KeyCode]=true; rawMovement=true; awaitNeutral=false; rawAxes()
+  end
+  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.Space or input.KeyCode==Enum.KeyCode.J then press(true,input) end
  end)
  local function cancelled(input: InputObject): boolean
   if input.UserInputState~=Enum.UserInputState.Cancel then return false end
-  if input==stickTouch or input==aimTouch or (input.UserInputType==Enum.UserInputType.MouseButton1 and I.down) then cancel() end
+  local moving=rawMoveKeys[input.KeyCode]
+  if moveAxes[input.KeyCode] then rawMoveKeys[input.KeyCode]=nil; suppressedMoveKeys[input.KeyCode]=nil end
+  local keyboardPrimary=not primaryInput and I.down and (input.KeyCode==Enum.KeyCode.Space or input.KeyCode==Enum.KeyCode.J)
+  if moving or keyboardPrimary or input==primaryInput or input==stickTouch or input==aimTouch or (input.UserInputType==Enum.UserInputType.MouseButton1 and I.down) then cancel() end
   return true
  end
  UIS.InputEnded:Connect(function(input)
   if cancelled(input) then return end
-  if input.KeyCode==Enum.KeyCode.Space or input.KeyCode==Enum.KeyCode.J then primaryArmed=true; release() end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 then release() end
+  if moveAxes[input.KeyCode] then
+   rawMoveKeys[input.KeyCode]=nil; suppressedMoveKeys[input.KeyCode]=nil
+   if rawMovement then rawAxes() end
+   if next(rawMoveKeys)==nil and rawMovement then rawMovement=false; awaitNeutral=true end
+  end
+  if input==primaryInput then primaryArmed=true; release() end
   if input==stickTouch then stickTouch=nil; stick=Vector2.zero end
   if input==aimTouch then aimTouch=nil; release() end
  end)
@@ -86,7 +116,7 @@ return function(hud: any,send: any,primary: any,engine: any?)
  hud.primary.InputBegan:Connect(function(input: InputObject)
   refresh()
   if input.UserInputType==Enum.UserInputType.Touch and I.enabled and not aimTouch then
-   aimTouch=input; aimOrigin=Vector2.new(input.Position.X,input.Position.Y); press(true)
+   aimTouch=input; aimOrigin=Vector2.new(input.Position.X,input.Position.Y); press(true,input)
   end
  end)
  local function worldAxes(v: Vector2): (number,number)

@@ -1,5 +1,7 @@
 --!strict
-return function(player: Player)
+return function(player: Player,engine: any?)
+ local E=engine or {Instance=Instance,Color3=Color3,Enum=Enum,UDim2=UDim2,UDim=UDim}
+ local Instance,Color3,Enum,UDim2,UDim=E.Instance,E.Color3,E.Enum,E.UDim2,E.UDim
  local gui=Instance.new('ScreenGui'); gui.Name='GhostBall'; gui.ResetOnSpawn=false
  gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
  gui.Parent=player:WaitForChild('PlayerGui')
@@ -37,12 +39,15 @@ return function(player: Player)
   primary.Position=UDim2.new(1,if short then -88 else -108,1,if short then -88 else -110)
   joystick.Size=UDim2.fromOffset(if short then 72 else 108,if short then 72 else 108)
   joystick.Position=UDim2.new(0,16,1,if short then -88 else -126)
-  forfeit.Size=UDim2.fromOffset(112,if short then 40 else 48)
-  forfeit.Position=UDim2.new(0.5,-56,1,if short then -48 else -56)
+  forfeit.Size=UDim2.fromOffset(112,48)
+  forfeit.Position=UDim2.new(0.5,-56,1,-56)
   diagnostic.Size=UDim2.fromOffset(240,if short then 16 else 24)
-  diagnostic.Position=UDim2.new(0.5,-120,1,if short then -68 else -84)
-  for _,button in {mute,motion} do button.Size=UDim2.fromOffset(112,if short then 32 else 48) end
-  motion.Position=UDim2.new(1,-120,0,if short then 40 else 56)
+  diagnostic.Position=UDim2.new(0.5,-120,1,if short then -76 else -84)
+  -- Compact preferences sit side by side inside the existing top HUD margin.
+  -- The accepted 48px minimum applies to every required button at every size.
+  for _,button in {mute,motion} do button.Size=UDim2.fromOffset(if short then 48 else 112,48) end
+  mute.Position=UDim2.new(1,if short then -112 else -120,0,4)
+  motion.Position=UDim2.new(1,if short then -60 else -120,0,if short then 4 else 56)
   for _,button in {primary,joystick,mute,motion,forfeit} do button.TextSize=if short then 12 else 16 end
  end
  return {layout=layout,gui=gui,status=status,detail=detail,primary=primary,joystick=joystick,mute=mute,motion=motion,
