@@ -4,7 +4,7 @@ return function(R: any, M: any, move: any)
  local S: any = {}; S.__index=S
  function S.new(seed: number)
   return setmetatable({seed=seed,phase='waiting',deadline=0,now=0,matchId=0,roundId=0,
-   revision=0,eventId=0,events={},actors={},connected={},ball={},winner=nil,faults=0},S)
+   simTime=nil,revision=0,eventId=0,events={},actors={},connected={},ball={},winner=nil,faults=0},S)
  end
  function S.random(self: any): number
   self.seed=(self.seed*48271)%2147483647; return self.seed/2147483647
@@ -198,6 +198,24 @@ return function(R: any, M: any, move: any)
   if b.state=='held' then
    local a=self:actor(b.holderActorId); b.x,b.z=a.x,a.z; b.y=R.ballRadius; return
   end
+  local endpoint=self.now
+  local function claim(a: any,time: number)
+   b.state='held'; b.holderActorId=a.id; b.lastTouchActorId=a.id
+   b.previousHolderActorId=b.lastKickerActorId
+   b.x,b.z,b.y=a.x,a.z,R.ballRadius; b.vx,b.vy,b.vz=0,0,0
+   self.now=time; a.lockUntil=time+R.catchLock; self:emit('catch',a.id)
+   self.now=endpoint
+  end
+  -- Birth-time contact needs no flight time. Do not replace this with a positive
+  -- dt epsilon: that would reintroduce travel before a strike/deadline.
+  if dt<=0 then
+   if b.y<=R.catchHeight then
+    for _,a in self:living() do
+     if self:canCatch(a,endpoint) and (b.x-a.x)^2+(b.z-a.z)^2<=R.pickup^2 then claim(a,endpoint); break end
+    end
+   end
+   return
+  end
   -- Small bounded substeps allow height and wall changes without tunneling.
   local n=math.ceil(dt/(1/240)); local h=dt/n
   for sub=1,n do
@@ -208,15 +226,12 @@ return function(R: any, M: any, move: any)
     local ox,oz=a.oldX or a.x,a.oldZ or a.z
     local adx,adz=(a.x-ox)/n,(a.z-oz)/n
     local cx,cz=ox+adx*(sub-1),oz+adz*(sub-1)
-    local t=M.sweep(x,z,dx-adx,dz-adz,cx,cz,R.pickup)
-    if t and y+(ny-y)*t<=R.catchHeight and self:canCatch(a,self.now-dt+sub*h) and t<bestT then best=a; bestT=t end
+    local enter,leave=M.sweepInterval(x,z,dx-adx,dz-adz,cx,cz,R.pickup)
+    local begin=endpoint-dt+(sub-1)*h
+    local t=if enter and leave then M.catchTime(enter,leave,y,b.vy,R.gravity,R.catchHeight,h,(b.immune[a.id] or 0)-begin) else nil
+    if t and t<bestT then best=a; bestT=t end
    end
-   if best then
-    b.state='held'; b.holderActorId=best.id; b.lastTouchActorId=best.id
-    b.previousHolderActorId=b.lastKickerActorId
-    b.x,b.z,b.y=best.x,best.z,R.ballRadius; b.vx,b.vy,b.vz=0,0,0
-    best.lockUntil=self.now+R.catchLock; self:emit('catch',best.id); return
-   end
+   if best then claim(best,endpoint-dt+(sub-1+bestT)*h); return end
    b.x,b.z,b.y=x+dx,z+dz,ny
    b.vy-=R.gravity*h
    if ny<=R.ballRadius then
@@ -233,19 +248,33 @@ return function(R: any, M: any, move: any)
    if math.abs(b.z)>hd then b.z=math.clamp(b.z,-hd,hd); b.vz=-b.vz*R.rebound end
   end
  end
+ -- Integrate [now-dt,now]. No launch or motion may borrow time before its birth.
  function S.step(self: any, now: number,dt: number)
-  self:resolve(now)
+  local phase=self.phase
+  self:resolve(now) -- Wall/deadline first, even when the requested interval crosses it.
+  local begin=math.max(now-math.max(0,dt),self.simTime or -math.huge)
+  self.simTime=now
   if self.phase=='waiting' then if next(self.connected) then self:start() end; return end
-  if self.phase~='play' then return end
-  for _,a in self:living() do
-   if a.chargeAt and now-a.lastMove>R.inputTimeout then a.chargeAt=nil end
-   a.oldX,a.oldZ=a.x,a.z
-   move(a,dt,now,self.ball.holderActorId==a.id)
+  if self.phase~='play' or phase~='play' then return end
+  local function integrate(finish: number)
+   local duration=math.max(0,finish-begin)
+   self.now=finish
+   for _,a in self:living() do
+    if a.chargeAt and finish-a.lastMove>R.inputTimeout then a.chargeAt=nil end
+    a.oldX,a.oldZ=a.x,a.z
+    move(a,duration,finish,self.ball.holderActorId==a.id)
+   end
+   self:ballStep(duration)
+   begin=finish
   end
-  for _,a in self:living() do
-   if a.passAt and now>=a.passAt then self:launch(a) end
+  -- At most one scheduled strike exists: only the current holder can schedule one.
+  local holder=self:actor(self.ball.holderActorId)
+  if self.ball.state=='held' and holder and holder.passAt and holder.passAt<=now then
+   local strike=math.max(begin,holder.passAt)
+   integrate(strike)
+   self:launch(holder) -- Immunity and event timestamps start at the actual strike.
   end
-  self:ballStep(dt); self.revision+=1
+  integrate(now); self.revision+=1
  end
  function S.snapshot(self: any): any
   local actors={}

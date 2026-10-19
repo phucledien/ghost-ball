@@ -10,17 +10,19 @@ local P=require(assets.Primitives); P.pitch()
 local views=require(script.Parent.ActorView)(P)
 local effects=require(script.Parent.Effects)(P)
 local audio=require(script.Parent.Audio)(require(assets.AssetManifest),hud.diagnostic)
-local camera=require(script.Parent.CameraController)
+local camera=require(script.Parent.CameraController)(require(shared.CameraFit),R,hud)
 local prediction=require(script.Parent.Prediction)(require(shared.Movement)(R,M))
 local inputRemote=root:WaitForChild('Input') :: RemoteEvent
 local snapshotRemote=root:WaitForChild('Snapshot') :: RemoteEvent
 local eventRemote=root:WaitForChild('Event') :: RemoteEvent
 local state: any=nil; local history: {any}={}; local localId: number?=nil
 local actionSeq,moveSeq,lastMove=0,0,0
+local sentMove={mx=0,mz=0,sentAt=0}
 local reduced=false; local eventId=0; local lastCountdown=''
 local input: any=nil
 local function send(action: string)
  if not state then return end
+ if action=='Cancel' then sentMove={mx=0,mz=0,sentAt=workspace:GetServerTimeNow()} end
  actionSeq+=1
  inputRemote:FireServer('Action',{matchId=state.matchId,roundId=state.roundId,seq=actionSeq,action=action,
   aimX=if input then input.ax else 1,aimZ=if input then input.az else 0})
@@ -48,14 +50,14 @@ snapshotRemote.OnClientEvent:Connect(function(s)
  if state and (s.matchId<state.matchId or (s.matchId==state.matchId and s.revision<=state.revision)) then return end
  local epoch=not state or state.matchId~=s.matchId or state.roundId~=s.roundId
  if epoch then
-  prediction.clear(); table.clear(history); input.clear()
+  prediction.clear(); table.clear(history); input.clear(); sentMove={mx=0,mz=0,sentAt=0}
   if not state or state.matchId~=s.matchId then views.clear() end
  end
  state=s; localId=nil
  for _,a in s.actors do if a.userId==player.UserId then localId=a.id end end
  table.insert(history,s); if #history>6 then table.remove(history,1) end
  local a=if localId then s.actors[localId] else nil
- if a and a.alive and s.phase=='play' then prediction.reconcile(a,s.ball.holderActorId==localId) else prediction.clear() end
+ if a and a.alive and s.phase=='play' then prediction.reconcile(a,s.ball.holderActorId==localId,s.serverTime) else prediction.clear() end
 end)
 eventRemote.OnClientEvent:Connect(function(e)
  if e.eventId<=eventId then return end
@@ -79,18 +81,21 @@ RunService.RenderStepped:Connect(function(dt)
  local portrait=c.ViewportSize.Y>c.ViewportSize.X
  hud.rotate.Visible=portrait
  local a=if state and localId then state.actors[localId] else nil
- local enabled=state and state.phase=='play' and a and a.alive and not portrait and not hud.help.Visible and not GuiService.MenuIsOpen
+ local enabled=state and state.phase=='play' and a and a.alive and not portrait and not hud.help.Visible and not GuiService.MenuIsOpen and UIS:GetFocusedTextBox()==nil
  input.setEnabled(enabled==true); input.update(a)
+ enabled=input.enabled
  hud.joystick.Visible=UIS.TouchEnabled; hud.primary.Visible=UIS.TouchEnabled
  if not state then return end
  local now=workspace:GetServerTimeNow()
+ -- Predict the interval with the input already sent before its start. A new
+ -- Move at this endpoint applies to future frames, never retroactively to dt.
+ local predicted=nil
+ if enabled then predicted=prediction.step(a,sentMove,moveSeq,math.min(dt,0.05),now,state.ball.holderActorId==localId) end
  if enabled and now-lastMove>=1/20 then
-  moveSeq+=1; lastMove=now
+  moveSeq+=1; lastMove=now; sentMove={mx=input.mx,mz=input.mz,sentAt=now}
   inputRemote:FireServer('Move',{matchId=state.matchId,roundId=state.roundId,seq=moveSeq,
    moveX=input.mx,moveZ=input.mz,aimX=input.ax,aimZ=input.az})
  end
- local predicted=nil
- if enabled then predicted=prediction.step(a,input,moveSeq+1,math.min(dt,0.05),now,state.ball.holderActorId==localId) end
  local before,after=history[1],history[#history]
  local targetTime=now-0.1
  for i=1,#history-1 do

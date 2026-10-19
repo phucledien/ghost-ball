@@ -1,5 +1,5 @@
 --!strict
-return function(sim: any, P: any)
+return function(sim: any, P: any,advance: ((number) -> ())?)
  local clients: {[number]: any}={}
  local rejected: {[string]: number}={}
  local function reject(reason: string): boolean
@@ -15,8 +15,9 @@ return function(sim: any, P: any)
   if not P.bucket(bucket,now,rate,if rate==1 then 2 else 5) then return reject('rate') end
   local valid,reason=P.validate(channel,p)
   if not valid then return reject(reason) end
-  sim:resolve(now)
-  if channel=='Ready' or channel=='SyncRequest' then return true end
+  if channel=='Ready' or channel=='SyncRequest' then
+   if advance then advance(now) end; sim:resolve(now); return true
+  end
   if p.matchId~=sim.matchId or p.roundId~=sim.roundId then return reject('epoch') end
   local a=nil
   for _,v in sim.actors do if v.userId==id then a=v; break end end
@@ -24,6 +25,9 @@ return function(sim: any, P: any)
   local key=if channel=='Move' then 'seqMove' else 'seqAction'
   if p.seq<=c[key] then return reject('replay') end
   c[key]=p.seq
+  -- Only bounded, validated, current-epoch, live-sender, non-replayed traffic
+  -- may flush the simulation. sim:command still resolves the wall deadline first.
+  if advance then advance(now) end
   if not sim:command(a.id,if channel=='Move' then 'Move' else p.action,p,now) then return reject('illegal') end
   if channel=='Move' then a.moveSeq=p.seq else a.actionSeq=p.seq end
   return true

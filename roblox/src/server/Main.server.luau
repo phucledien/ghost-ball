@@ -8,34 +8,34 @@ local move=require(shared.Movement)(R,M)
 local Sim=require(shared.Sim)(R,M,move)
 local sim=Sim.new(7321)
 local bots=require(shared.Bots)(R,M)
-local gateway=require(script.Parent.InputGateway)(sim,require(shared.Protocol)(M))
+local clock=require(shared.Clock)(sim,R,workspace:GetServerTimeNow())
+local overruns=0
+local function advance(now: number) if clock(now) then overruns+=1 end end
+local gateway=require(script.Parent.InputGateway)(sim,require(shared.Protocol)(M),advance)
 Players.CharacterAutoLoads=false
-local function join(p: Player) sim:join(p.UserId,p.DisplayName,workspace:GetServerTimeNow()) end
+local function join(p: Player)
+ local now=workspace:GetServerTimeNow(); advance(now); sim:join(p.UserId,p.DisplayName,now)
+end
 Players.PlayerAdded:Connect(join)
 for _,p in Players:GetPlayers() do join(p) end
 Players.PlayerRemoving:Connect(function(p)
- sim:leave(p.UserId,workspace:GetServerTimeNow()); gateway.remove(p.UserId)
+ local now=workspace:GetServerTimeNow(); advance(now)
+ sim:leave(p.UserId,now); gateway.remove(p.UserId)
 end)
 local input=root:WaitForChild('Input') :: RemoteEvent
 local snapshot=root:WaitForChild('Snapshot') :: RemoteEvent
 local event=root:WaitForChild('Event') :: RemoteEvent
 input.OnServerEvent:Connect(function(p,channel,payload)
- local ok=gateway.receive(p,channel,payload,workspace:GetServerTimeNow())
+ local now=workspace:GetServerTimeNow()
+ local ok=gateway.receive(p,channel,payload,now)
  if ok and (channel=='Ready' or channel=='SyncRequest') then snapshot:FireClient(p,sim:snapshot()) end
 end)
-local accumulated,lastSnapshot,lastDiagnostic=0,0,0
-local overruns=0
-RunService.Heartbeat:Connect(function(dt)
+local lastSnapshot,lastDiagnostic=0,0
+RunService.Heartbeat:Connect(function()
  local now=workspace:GetServerTimeNow()
- -- Wall deadline precedes bots, contacts and fixed-step catch-up, even after a stall.
- sim:resolve(now)
+ -- Flush simulation before introducing current-time bot commands.
+ advance(now)
  bots(sim,now)
- accumulated+=dt
- local count=0
- while accumulated>=R.step and count<8 do
-  sim:step(now,R.step); accumulated-=R.step; count+=1
- end
- if accumulated>=R.step then accumulated%=R.step; overruns+=1 end
  local changed=#sim.events>0
  for _,e in sim.events do event:FireAllClients(e) end
  table.clear(sim.events)

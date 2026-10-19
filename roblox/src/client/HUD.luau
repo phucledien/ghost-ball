@@ -27,6 +27,24 @@ return function(player: Player)
  local diagnostic=text('AudioDiagnostic','Audio assets pending import',UDim2.fromOffset(240,24),UDim2.new(0.5,-120,1,-84),false); diagnostic.TextSize=12
  help.Activated:Connect(function() help.Visible=false end)
  helpButton.Activated:Connect(function() help.Visible=not help.Visible end)
- return {gui=gui,status=status,detail=detail,primary=primary,joystick=joystick,mute=mute,motion=motion,
+ local function layout(height: number)
+  local short=height<500
+  status.Size=UDim2.new(0.68,0,0,if short then 40 else 72)
+  detail.Size=UDim2.new(0.68,0,0,if short then 32 else 48)
+  detail.Position=UDim2.new(0.16,0,0,if short then 48 else 80)
+  status.TextSize=if short then 12 else 16; detail.TextSize=if short then 12 else 16
+  primary.Size=UDim2.fromOffset(if short then 72 else 92,if short then 72 else 92)
+  primary.Position=UDim2.new(1,if short then -88 else -108,1,if short then -88 else -110)
+  joystick.Size=UDim2.fromOffset(if short then 72 else 108,if short then 72 else 108)
+  joystick.Position=UDim2.new(0,16,1,if short then -88 else -126)
+  forfeit.Size=UDim2.fromOffset(112,if short then 40 else 48)
+  forfeit.Position=UDim2.new(0.5,-56,1,if short then -48 else -56)
+  diagnostic.Size=UDim2.fromOffset(240,if short then 16 else 24)
+  diagnostic.Position=UDim2.new(0.5,-120,1,if short then -68 else -84)
+  for _,button in {mute,motion} do button.Size=UDim2.fromOffset(112,if short then 32 else 48) end
+  motion.Position=UDim2.new(1,-120,0,if short then 40 else 56)
+  for _,button in {primary,joystick,mute,motion,forfeit} do button.TextSize=if short then 12 else 16 end
+ end
+ return {layout=layout,gui=gui,status=status,detail=detail,primary=primary,joystick=joystick,mute=mute,motion=motion,
   help=help,rotate=rotate,forfeit=forfeit,diagnostic=diagnostic}
 end
