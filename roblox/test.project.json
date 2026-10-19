@@ -1,0 +1,9 @@
+{
+ "name":"GhostBallRulesTests",
+ "tree":{
+  "$className":"DataModel",
+  "ReplicatedStorage":{"GhostBall":{"$className":"Folder","Shared":{"$path":"src/shared"}}},
+  "ServerScriptService":{"GhostBall":{"$className":"Folder","InputGateway":{"$path":"src/server/InputGateway.luau"}},"RulesTests":{"$path":"tests/Studio.server.luau"}},
+  "ServerStorage":{"GhostBallTests":{"$className":"Folder","Suite":{"$path":"tests/Suite.luau"}}}
+ }
+}
