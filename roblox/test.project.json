@@ -1,0 +1,57 @@
+{
+ "name": "GhostBallRulesTests",
+ "tree": {
+  "$className": "DataModel",
+  "ReplicatedStorage": {
+   "GhostBall": {
+    "$className": "Folder",
+    "Shared": {
+     "$path": "src/shared"
+    }
+   }
+  },
+  "ServerScriptService": {
+   "GhostBall": {
+    "$className": "Folder",
+    "InputGateway": {
+     "$path": "src/server/InputGateway.luau"
+    }
+   },
+   "RulesTests": {
+    "$path": "tests/Studio.server.luau"
+   }
+  },
+  "ServerStorage": {
+   "GhostBallTests": {
+    "$className": "Folder",
+    "Suite": {
+     "$path": "tests/Suite.luau"
+    },
+    "Regressions": {
+     "$path": "tests/Regressions.luau"
+    },
+    "InputHandlers": {
+     "$path": "tests/InputHandlers.luau"
+    },
+    "CameraAdapter": {
+     "$path": "tests/CameraAdapter.luau"
+    },
+    "Prediction": {
+     "$path": "src/client/Prediction.luau"
+    },
+    "InputController": {
+     "$path": "src/client/InputController.luau"
+    },
+    "CameraController": {
+     "$path": "src/client/CameraController.luau"
+    },
+    "HUD": {
+     "$path": "src/client/HUD.luau"
+    },
+    "HUDLayout": {
+     "$path": "tests/HUDLayout.luau"
+    }
+   }
+  }
+ }
+}

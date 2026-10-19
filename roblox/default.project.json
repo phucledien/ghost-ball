@@ -1,0 +1,11 @@
+{
+ "name":"GhostBallMVP",
+ "tree": {
+  "$className":"DataModel",
+  "ReplicatedStorage":{"GhostBall":{"$className":"Folder","Shared":{"$path":"src/shared"},"Assets":{"$path":"src/assets"},"Input":{"$className":"RemoteEvent"},"Snapshot":{"$className":"RemoteEvent"},"Event":{"$className":"RemoteEvent"}}},
+  "ServerScriptService":{"GhostBall":{"$path":"src/server"}},
+  "StarterPlayer":{"StarterPlayerScripts":{"GhostBall":{"$path":"src/client"}}},
+  "Workspace":{"$properties":{"Gravity":90,"StreamingEnabled":false}},
+  "Lighting":{"$properties":{"ClockTime":14,"Brightness":2,"Ambient":[0.5,0.5,0.6]}}
+ }
+}
